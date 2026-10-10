@@ -21,6 +21,7 @@ import {
   listSkills,
   log,
   needsCodexPolicy,
+  nodeCommand,
   readJSON,
   replaceHermesHooks,
   resolveAgents,
@@ -31,23 +32,12 @@ import {
   writeCodexPolicy,
   writeJSON,
 } from './lib.mjs';
+import { wireAgentsMd } from './agents-md.mjs';
 
 const HERMES_DIR = '~/.agents/skills';
 // Hook do Hermes que refaz os links quando ele cria ou apaga uma skill (scripts/hermes-hook.mjs).
-// O Hermes divide o comando com shlex e roda sem shell: caminho com espaço vai entre aspas.
-const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'"'"'`)}'`);
-// Node de caminho estável: o de uma versão instalada pelo mise/asdf/nvm/fnm/volta some na próxima
-// atualização, então fica o shim ou o do sistema que estiver no PATH.
-const versioned = (p) => /[/\\](mise|asdf|\.nvm|nvm|fnm|volta)[/\\](.*[/\\])?(installs|versions|node-versions)[/\\]/.test(p);
-const stableNode = () =>
-  versioned(process.execPath)
-    ? (process.env.PATH || '')
-        .split(path.delimiter)
-        .map((d) => path.join(d, 'node'))
-        .find((p) => !versioned(p) && fs.existsSync(p)) || process.execPath
-    : process.execPath;
 export const HERMES_HOOK = {
-  command: [stableNode(), path.join(REPO, 'scripts', 'hermes-hook.mjs')].map(quote).join(' '),
+  command: nodeCommand(path.join(REPO, 'scripts', 'hermes-hook.mjs')),
   matcher: '^skill_manage$',
   timeout: 60,
 };
@@ -176,6 +166,7 @@ export async function link({ dryRun = false, agents, noClaudeDir = false, unlink
   }
 
   if (!dryRun) writeJSON(statePath, { roots: unlink ? [] : roots.map((r) => r.dir) });
+  wireAgentsMd({ agents, dryRun, unlink });
   if (agents.includes('hermes') && !unlink) {
     log.step('Hermes: skills.external_dirs e skills.create_dir');
     // Raízes privadas que o Hermes pode ler: entram como pasta real, não pelos links de ~/.agents/skills.
