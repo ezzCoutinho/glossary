@@ -15,12 +15,14 @@ import {
   backupFile,
   confirm,
   expandHome,
+  hermesHooks,
   hermesProfiles,
   isMain,
   listSkills,
   log,
   needsCodexPolicy,
   readJSON,
+  replaceHermesHooks,
   resolveAgents,
   run,
   setAssumeYes,
@@ -31,6 +33,25 @@ import {
 } from './lib.mjs';
 
 const HERMES_DIR = '~/.agents/skills';
+// Hook do Hermes que refaz os links quando ele cria ou apaga uma skill (scripts/hermes-hook.mjs).
+// O Hermes divide o comando com shlex e roda sem shell: caminho com espaço vai entre aspas.
+const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'"'"'`)}'`);
+// Node de caminho estável: o de uma versão instalada pelo mise/asdf/nvm/fnm/volta some na próxima
+// atualização, então fica o shim ou o do sistema que estiver no PATH.
+const versioned = (p) => /[/\\](mise|asdf|\.nvm|nvm|fnm|volta)[/\\](.*[/\\])?(installs|versions|node-versions)[/\\]/.test(p);
+const stableNode = () =>
+  versioned(process.execPath)
+    ? (process.env.PATH || '')
+        .split(path.delimiter)
+        .map((d) => path.join(d, 'node'))
+        .find((p) => !versioned(p) && fs.existsSync(p)) || process.execPath
+    : process.execPath;
+export const HERMES_HOOK = {
+  command: [stableNode(), path.join(REPO, 'scripts', 'hermes-hook.mjs')].map(quote).join(' '),
+  matcher: '^skill_manage$',
+  timeout: 60,
+};
+export const isGlossaryHook = (command) => command.includes('hermes-hook.mjs');
 
 function collectSkills(roots) {
   const byName = new Map();
@@ -165,8 +186,12 @@ export async function link({ dryRun = false, agents, noClaudeDir = false, unlink
     if (!profiles.length) log.warn(`hermes não está no PATH; adicione ${HERMES_DIR} em skills.external_dirs do ~/.hermes/config.yaml`);
     for (const h of profiles) await ensureHermesSkills(h, privateDirs, { dryRun });
   }
-  if (unlink && agents.includes('hermes'))
-    log.info(`Hermes: ${HERMES_DIR} continua em skills.external_dirs (remova com "hermes config edit" se quiser).`);
+  if (unlink && agents.includes('hermes')) {
+    for (const h of hermesProfiles())
+      if (hermesHooks(h, 'post_tool_call').some((x) => isGlossaryHook(String(x?.command || ''))))
+        replaceHermesHooks(h, 'post_tool_call', isGlossaryHook, [], { dryRun }) && !dryRun && log.ok(`${h.label}: hook das skills removido`);
+    log.info(`Hermes: ${HERMES_DIR}, o repositório privado e skills.create_dir continuam na config (remova com "hermes config edit" se quiser).`);
+  }
   if (skipped) log.warn(`${skipped} entrada(s) existente(s) preservada(s); confira os avisos acima`);
   return 0;
 }
@@ -222,6 +247,19 @@ async function ensureHermesSkills(h, privateDirs, { dryRun }) {
   }
 
   if (!privateDirs.length) return;
+
+  // Skill nova ou apagada pelo Hermes chega aos outros agentes sem rodar o link.mjs à mão.
+  const hooks = hermesHooks(h, 'post_tool_call').filter((x) => isGlossaryHook(String(x?.command || '')));
+  if (hooks.length === 1 && hooks[0].command === HERMES_HOOK.command && hooks[0].matcher === HERMES_HOOK.matcher)
+    log.ok(`${h.label}: hook que refaz os links das skills já ligado`);
+  else if (dryRun || (await confirm(`${h.label}: ligar o hook que refaz os links quando o Hermes cria ou apaga uma skill?`))) {
+    backup();
+    if (replaceHermesHooks(h, 'post_tool_call', isGlossaryHook, [HERMES_HOOK], { dryRun }) && !dryRun) {
+      log.ok(`${h.label}: hook das skills ligado`);
+      log.info('Na primeira vez que abrir o Hermes nesse perfil, ele pergunta se aceita o hook: responda sim.');
+    } else if (!dryRun) log.err(`${h.label}: o hook das skills não ficou gravado; confira com "${cmd} hooks list"`);
+  }
+
   const target = privateDirs[0];
   const create = get('skills.create_dir');
   const now = create.error ? null : create.value;

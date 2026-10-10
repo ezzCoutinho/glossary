@@ -205,6 +205,27 @@ export function hermesProfiles() {
   ];
 }
 
+// Hooks de um evento num perfil do Hermes (pre_tool_call, post_tool_call...), lidos e gravados pelo
+// CLI dele como lista JSON. O bloco hooks: é dividido entre ai-memory e glossary: cada um troca só
+// as próprias entradas (mine) e mantém as outras. Devolve true se gravou e conferiu.
+export function hermesHooks(h, event) {
+  try {
+    const v = JSON.parse(run(h.bin, [...h.args, 'config', 'get', `hooks.${event}`, '--json']).stdout.trim() || 'null');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+export function replaceHermesHooks(h, event, mine, entries, { dryRun = false } = {}) {
+  const list = [...hermesHooks(h, event).filter((e) => !mine(String(e?.command || ''))), ...entries];
+  const literal = JSON.stringify(list);
+  if (dryRun) return log.dry(`hermes ${h.args.join(' ')} config set hooks.${event} '${literal}'`), true;
+  run(h.bin, [...h.args, 'config', 'set', `hooks.${event}`, literal]);
+  const commands = (l) => l.map((e) => e?.command).join('\n');
+  return commands(hermesHooks(h, event)) === commands(list);
+}
+
 // Confere se o servidor MCP ficou registrado (e habilitado) num perfil do Hermes.
 export function checkHermes(h, name) {
   const line = run(h.bin, [...h.args, 'mcp', 'list']).stdout.split('\n').find((l) => new RegExp(`\\b${name}\\b`).test(l)) || '';
@@ -344,7 +365,8 @@ export function listSkills(root, { nested = false } = {}) {
     if (!e.isDirectory() && !e.isSymbolicLink()) continue;
     const dir = path.join(root, e.name);
     if (fs.existsSync(path.join(dir, 'SKILL.md'))) out.push({ name: e.name, dir });
-    else if (nested && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
+    // Pasta com ponto (.archive, .git) nunca é categoria.
+    else if (nested && !e.name.startsWith('.') && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }

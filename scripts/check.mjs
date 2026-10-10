@@ -22,7 +22,7 @@ import {
   wired,
 } from '../ai-memory/setup.mjs';
 import { CONFIG as SERENA_CONFIG, argsOk, codexTomlArgs, findSerena, readList } from '../serena/setup.mjs';
-import { expectedLinks, linkTarget } from './link.mjs';
+import { HERMES_HOOK, expectedLinks, isGlossaryHook, linkTarget } from './link.mjs';
 import {
   CODEX_HOME,
   CONFIG_DIR,
@@ -103,6 +103,10 @@ export async function check({ agents } = {}) {
       const create = get(h, 'skills.create_dir');
       if (create && same(create, privateDirs[0])) ok(`${h.label}: skills novas vão para ${privateDirs[0]}`);
       else warn(`${h.label}: skills novas vão para ${create || '~/.hermes/skills'}, fora do glossary (rode: node scripts/link.mjs)`);
+      const hook = (get(h, 'hooks.post_tool_call') || []).find((x) => isGlossaryHook(String(x?.command || '')));
+      if (!hook || hook.command !== HERMES_HOOK.command) warn(`${h.label}: sem o hook que refaz os links das skills novas (rode: node scripts/link.mjs)`);
+      else if (!hasText(hermesAllowlist(h), 'hermes-hook.mjs')) warn(`${h.label}: hook das skills ligado; abra o Hermes nesse perfil e aceite o hook`);
+      else ok(`${h.label}: skill nova do Hermes chega aos outros agentes sozinha`);
     }
   }
 
@@ -134,8 +138,7 @@ export async function check({ agents } = {}) {
       try {
         entry = r.code === 0 ? JSON.parse(r.stdout) : null;
       } catch {}
-      const config = run(h.bin, [...h.args, 'config', 'path']).stdout.trim();
-      const hooks = Boolean(config) && hermesHooksWired(config);
+      const hooks = hermesHooksWired(h);
       if (!entry) bad(`${h.label}: MCP do ai-memory não registrado (rode ./install.sh)`);
       else if (entry.enabled === false) warn(`${h.label}: MCP do ai-memory registrado mas desligado (hermes ${h.args.join(' ')} mcp test ai-memory)`);
       else if (!hooks) warn(`${h.label}: MCP ligado, mas sem os hooks que gravam as sessões (rode ./install.sh)`);

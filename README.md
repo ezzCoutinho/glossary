@@ -42,6 +42,7 @@ scripts/check.mjs               confere a instalação inteira, sem alterar nada
 scripts/private.mjs             repositório privado: cria e leva para outro computador (--export/--import)
 scripts/validate.mjs            regras das skills (estritas nas próprias)
 scripts/link.mjs                symlinks nas pastas dos agentes (--unlink desfaz)
+scripts/hermes-hook.mjs         hook do Hermes: skill que ele cria ou apaga chega aos outros agentes
 scripts/sync.mjs                atualiza vendor/ e as versões (o PR semanal usa este)
 scripts/guard.mjs               trava contra vazamento (pre-commit e CI)
 scripts/port-cursor-commands.mjs, scripts/port-memories.mjs
