@@ -183,12 +183,35 @@ export function runWithAnswers(cmd, args, answers, { dryRun = false } = {}) {
   return r.status;
 }
 
-// Confere se o servidor MCP ficou registrado (e habilitado) no Hermes.
-export function checkHermes(hermes, name) {
-  const line = run(hermes, ['mcp', 'list']).stdout.split('\n').find((l) => new RegExp(`\\b${name}\\b`).test(l)) || '';
-  if (!line) log.err(`hermes: ${name} não ficou registrado; rode "hermes mcp add" à mão`);
-  else if (/disabled|desabilitado|✗/i.test(line)) log.warn(`hermes: ${name} salvo desabilitado; confira com "hermes mcp test ${name}"`);
-  else log.ok(`hermes: ${name} registrado`);
+// Perfis do Hermes: o padrão (~/.hermes) e cada ~/.hermes/profiles/<nome>. Cada perfil tem config,
+// sessões e aprovação de hooks próprias, então skills, memória e Serena são ligados em todos.
+// "-p default" fixa o padrão mesmo quando outro perfil foi escolhido com "hermes profile use".
+// Uso: run(h.bin, [...h.args, 'config', 'path']).
+export function hermesProfiles() {
+  const bin = which('hermes');
+  if (!bin) return [];
+  const base = path.join(HOME, '.hermes');
+  const dir = path.join(base, 'profiles');
+  const names = fs.existsSync(dir)
+    ? fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'config.yaml')))
+        .map((e) => e.name)
+        .sort()
+    : [];
+  return [
+    { bin, args: ['-p', 'default'], label: 'hermes', home: base },
+    ...names.map((n) => ({ bin, args: ['-p', n], label: `hermes (${n})`, home: path.join(dir, n) })),
+  ];
+}
+
+// Confere se o servidor MCP ficou registrado (e habilitado) num perfil do Hermes.
+export function checkHermes(h, name) {
+  const line = run(h.bin, [...h.args, 'mcp', 'list']).stdout.split('\n').find((l) => new RegExp(`\\b${name}\\b`).test(l)) || '';
+  const cmd = `hermes ${h.args.join(' ')}`;
+  if (!line) log.err(`${h.label}: ${name} não ficou registrado; rode "${cmd} mcp add" à mão`);
+  else if (/disabled|desabilitado|✗/i.test(line)) log.warn(`${h.label}: ${name} salvo desabilitado; confira com "${cmd} mcp test ${name}"`);
+  else log.ok(`${h.label}: ${name} registrado`);
 }
 
 export function which(cmd) {

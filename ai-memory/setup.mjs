@@ -23,6 +23,7 @@ import {
   confirm,
   die,
   findClaudeBinary,
+  hermesProfiles,
   isMain,
   localProjects,
   log,
@@ -66,8 +67,8 @@ export const AGENT_FILES = {
 };
 // O OpenClaude deriva do Claude Code e lê os mesmos hooks, na pasta de config dele.
 export const OPENCLAUDE_SETTINGS = path.join(HOME, '.openclaude', 'settings.json');
-// Aprovações dos hooks do Hermes: ele pede confirmação de cada hook na primeira sessão.
-export const HERMES_ALLOWLIST = path.join(HOME, '.hermes', 'shell-hooks-allowlist.json');
+// Aprovações dos hooks do Hermes, uma por perfil: ele pede confirmação de cada hook na primeira sessão.
+export const hermesAllowlist = (h) => path.join(h.home, 'shell-hooks-allowlist.json');
 export const hasText = (file, text) => fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(text);
 
 function platformAsset() {
@@ -354,38 +355,38 @@ function hermesHooksBlock(file) {
 
 export const hermesHooksWired = (file) => /--agent\s+hermes/.test(hermesHooksBlock(file).text);
 
-async function wireHermesHooks(hermes, { dryRun }) {
-  const file = run(hermes, ['config', 'path']).stdout.trim();
+async function wireHermesHooks(h, { dryRun }) {
+  const file = run(h.bin, [...h.args, 'config', 'path']).stdout.trim();
   const b = hermesHooksBlock(file);
-  if (/--agent\s+hermes/.test(b.text)) return log.ok('hermes: hooks do ai-memory já ligados');
+  if (/--agent\s+hermes/.test(b.text)) return log.ok(`${h.label}: hooks do ai-memory já ligados`);
   // Um bloco hooks: com hooks de outra origem não é mexido; vazio ("hooks: {}") é trocado.
   if (b.start >= 0 && !/^hooks:\s*(\{\s*\})?$/.test(b.text.trim()))
-    return log.warn(`hermes: ${tilde(file)} já tem hooks próprios; acrescente neles o que "${tilde(BIN)} install-hooks --agent hermes" imprime`);
+    return log.warn(`${h.label}: ${tilde(file)} já tem hooks próprios; acrescente neles o que "${tilde(BIN)} install-hooks --agent hermes" imprime`);
   if (dryRun) return log.dry(`acrescentaria os hooks do ai-memory em ${tilde(file)}`);
-  if (!(await confirm(`hermes: gravar os hooks do ai-memory em ${tilde(file)}?`))) return;
+  if (!(await confirm(`${h.label}: gravar os hooks do ai-memory em ${tilde(file)}?`))) return;
   const out = run(BIN, ['install-hooks', '--agent', 'hermes']).stdout;
   const block = out.slice(out.search(/^hooks:/m));
-  if (!/^hooks:\n {2}\w/.test(block)) return log.err('hermes: o ai-memory não imprimiu o bloco hooks: esperado');
+  if (!/^hooks:\n {2}\w/.test(block)) return log.err(`${h.label}: o ai-memory não imprimiu o bloco hooks: esperado`);
   backupFile(file);
   if (b.start >= 0) b.lines.splice(b.start, b.end - b.start);
   fs.writeFileSync(file, `${b.lines.join('\n').replace(/\n*$/, '\n')}${block}`);
-  log.ok('hermes: hooks do ai-memory gravados');
-  log.info('Na primeira vez que abrir o Hermes, ele pergunta se aceita os hooks do ai-memory: responda sim.');
+  log.ok(`${h.label}: hooks do ai-memory gravados`);
+  log.info('Na primeira vez que abrir o Hermes nesse perfil, ele pergunta se aceita os hooks do ai-memory: responda sim.');
 }
 
 // Tira do Hermes o bloco hooks: quando todos os hooks dele são do ai-memory.
-function unwireHermesHooks(hermes, { dryRun }) {
-  const file = run(hermes, ['config', 'path']).stdout.trim();
+function unwireHermesHooks(h, { dryRun }) {
+  const file = run(h.bin, [...h.args, 'config', 'path']).stdout.trim();
   const b = hermesHooksBlock(file);
   if (!/--agent\s+hermes/.test(b.text)) return;
   const commands = b.text.split('\n').filter((l) => /^\s*-?\s*command:/.test(l));
   if (!commands.every((l) => l.includes('ai-memory')))
-    return log.warn(`hermes: ${tilde(file)} tem outros hooks junto; tire à mão os do ai-memory`);
+    return log.warn(`${h.label}: ${tilde(file)} tem outros hooks junto; tire à mão os do ai-memory`);
   if (dryRun) return log.dry(`tiraria os hooks do ai-memory de ${tilde(file)}`);
   backupFile(file);
   b.lines.splice(b.start, b.end - b.start);
   fs.writeFileSync(file, b.lines.join('\n').replace(/\n*$/, '\n'));
-  log.ok('hermes: hooks do ai-memory removidos');
+  log.ok(`${h.label}: hooks do ai-memory removidos`);
 }
 
 // Tira os hooks do ai-memory de um arquivo no formato do Claude Code (settings.json, hooks.json do
@@ -434,17 +435,19 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
   }
 
   if (agents.includes('hermes')) {
-    const hermes = which('hermes');
-    if (!hermes) log.warn('hermes não está no PATH; pulei');
-    else if (/\bai-memory\b/.test(run(hermes, ['mcp', 'list']).stdout)) log.ok('hermes: ai-memory já registrado');
-    else if (dryRun || (await confirm('hermes: registrar o MCP do ai-memory (hermes mcp add)?'))) {
-      backupFile(run(hermes, ['config', 'path']).stdout.trim(), { dryRun });
-      // Perguntas do Hermes: "exige autenticação?" -> n; "habilitar todas as ferramentas?"
-      // (ou, se a conexão falhar, "salvar mesmo assim?") -> y.
-      runWithAnswers(hermes, ['mcp', 'add', 'ai-memory', '--url', MCP_URL], 'n\ny\n', { dryRun });
-      if (!dryRun) checkHermes(hermes, 'ai-memory');
+    const profiles = hermesProfiles();
+    if (!profiles.length) log.warn('hermes não está no PATH; pulei');
+    for (const h of profiles) {
+      if (/\bai-memory\b/.test(run(h.bin, [...h.args, 'mcp', 'list']).stdout)) log.ok(`${h.label}: ai-memory já registrado`);
+      else if (dryRun || (await confirm(`${h.label}: registrar o MCP do ai-memory (hermes mcp add)?`))) {
+        backupFile(run(h.bin, [...h.args, 'config', 'path']).stdout.trim(), { dryRun });
+        // Perguntas do Hermes: "exige autenticação?" -> n; "habilitar todas as ferramentas?"
+        // (ou, se a conexão falhar, "salvar mesmo assim?") -> y.
+        runWithAnswers(h.bin, [...h.args, 'mcp', 'add', 'ai-memory', '--url', MCP_URL], 'n\ny\n', { dryRun });
+        if (!dryRun) checkHermes(h, 'ai-memory');
+      }
+      await wireHermesHooks(h, { dryRun });
     }
-    if (hermes) await wireHermesHooks(hermes, { dryRun });
   }
 
   if (agents.includes('openclaude')) {
@@ -545,9 +548,10 @@ async function uninstall(agents, { dryRun }) {
   log.step('Desligar o ai-memory');
   if (fs.existsSync(BIN)) runLive(BIN, dryRun ? ['uninstall'] : ['uninstall', '--apply', '--yes']);
   else log.warn(`binário não encontrado em ${tilde(BIN)}`);
-  const hermes = agents.includes('hermes') && which('hermes');
-  if (hermes) runWithAnswers(hermes, ['mcp', 'remove', 'ai-memory'], 'y\n', { dryRun });
-  if (hermes) unwireHermesHooks(hermes, { dryRun });
+  for (const h of agents.includes('hermes') ? hermesProfiles() : []) {
+    runWithAnswers(h.bin, [...h.args, 'mcp', 'remove', 'ai-memory'], 'y\n', { dryRun });
+    unwireHermesHooks(h, { dryRun });
+  }
   const oc = agents.includes('openclaude') && which('openclaude');
   if (oc) runQuiet(oc, ['mcp', 'remove', '--scope', 'user', 'ai-memory'], { dryRun });
   if (agents.includes('openclaude')) unwireOpenclaudeHooks({ dryRun });

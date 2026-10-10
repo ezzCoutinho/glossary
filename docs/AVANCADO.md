@@ -27,7 +27,7 @@ flowchart LR
 |---|---|---|---|
 | Claude Code | `~/.claude/skills` | MCP + hooks (captura automática) | MCP, contexto `claude-code` |
 | Cursor | `~/.agents/skills` e também `~/.claude/skills` | MCP + hooks (captura automática) | MCP, contexto `ide` |
-| Hermes | `~/.agents/skills`, via `skills.external_dirs` | MCP + hooks de ferramenta | MCP, contexto `ide` |
+| Hermes (todos os perfis) | `~/.agents/skills`, via `skills.external_dirs` | MCP + hooks de ferramenta | MCP, contexto `ide` |
 | OpenClaude | `~/.openclaude/skills` | MCP + hooks (captura automática), só se for confiável | MCP, contexto `claude-code` |
 | Codex | `~/.agents/skills`, a mesma pasta do Cursor e do Hermes | MCP + hooks (captura automática), só se for confiável | MCP, contexto `codex` |
 
@@ -35,7 +35,7 @@ flowchart LR
 - **Codex**: lê as skills de `~/.agents/skills` (segue symlinks) e guarda o MCP no `~/.codex/config.toml` e os hooks no `~/.codex/hooks.json` (o `CODEX_HOME` muda a pasta). Na primeira sessão ele mostra "Hooks need review": escolha "Trust all and continue"; a aprovação fica no `config.toml` e o `--check` avisa enquanto ela não existir. O Serena entra com o contexto `codex` e `startup_timeout_sec = 15`, porque o padrão de 10 s estoura em projeto grande; sem o comando `codex` no terminal (só o aplicativo), o glossary grava a tabela `[mcp_servers.serena]` direto no `config.toml`, que o aplicativo também lê. As conversas antigas do Codex (`~/.codex/sessions`) entram na importação do histórico.
   - **Skills que só rodam quando chamadas pelo nome**: o Codex ignora `disable-model-invocation` do frontmatter; a regra dele é `agents/openai.yaml` com `policy: allow_implicit_invocation: false`. O `link.mjs` cria esse arquivo nas skills próprias (públicas e privadas) que têm `disable-model-invocation: true`, e o `validate.mjs` exige nas públicas. As skills de terceiros em `vendor/` não podem ganhar o arquivo (são cópia fiel), então o Codex pode acionar sozinho as de terceiros marcadas assim (por exemplo `implement`, `triage`, `handoff`).
   - **Pasta compartilhada**: como o Codex lê a mesma pasta do Cursor e do Hermes, uma skill privada só entra em `~/.agents/skills` se o Codex for confiável. Com "não", ela sai dessa pasta e o Hermes também deixa de vê-la (o Cursor continua vendo pela `~/.claude/skills`).
-- **Hermes**: o ai-memory grava as ferramentas que o Hermes usa (`pre_tool_call` e `post_tool_call`), num bloco `hooks:` que o instalador acrescenta ao `~/.hermes/config.yaml`. Na primeira sessão, o Hermes pede para aprovar cada hook; responda sim. As mensagens e o fim da sessão do Hermes ficariam com um plugin de memória da comunidade (`ai-memory-hermes-plugin`), que o glossary não instala. Para o handoff, o Hermes usa as ferramentas `memory_*` do MCP.
+- **Hermes**: o ai-memory grava as ferramentas que o Hermes usa (`pre_tool_call` e `post_tool_call`), num bloco `hooks:` que o instalador acrescenta ao `~/.hermes/config.yaml`. Cada perfil (`~/.hermes/profiles/<nome>`) tem config, sessões e aprovações próprias, então o glossary liga skills, memória e Serena em todos os perfis, com `hermes -p <nome>`. Na primeira sessão de cada perfil, o Hermes pede para aprovar cada hook; responda sim. As mensagens e o fim da sessão do Hermes ficariam com um plugin de memória da comunidade (`ai-memory-hermes-plugin`), que o glossary não instala. Para o handoff, o Hermes usa as ferramentas `memory_*` do MCP.
 
 ## Rodar as partes separadas
 
@@ -145,7 +145,7 @@ O script:
 |---|---|---|
 | Claude Code | symlinks em `~/.claude/skills`; `~/.claude.json` (MCP `ai-memory` e `serena`); `~/.claude/settings.json` (hooks) | `claude mcp list` ou `/mcp` dentro da sessão; chame uma skill pelo nome, ex.: `/ponytail-review` |
 | Cursor | symlinks em `~/.agents/skills`; `~/.cursor/mcp.json` (`ai-memory` e `serena`, sem apagar os outros servidores); `~/.cursor/hooks.json` | Settings → MCP mostra os dois conectados |
-| Hermes | `~/.hermes/config.yaml` (`skills.external_dirs`, `mcp_servers` e `hooks`) | `hermes mcp test ai-memory`, `hermes mcp test serena`, `hermes hooks doctor`, `hermes skills list` |
+| Hermes | `~/.hermes/config.yaml` e `~/.hermes/profiles/<nome>/config.yaml` (`skills.external_dirs`, `mcp_servers` e `hooks`) | `hermes mcp test ai-memory`, `hermes mcp test serena`, `hermes hooks doctor`, `hermes skills list` |
 | OpenClaude | symlinks em `~/.openclaude/skills`; `~/.openclaude.json` (MCP); `~/.openclaude/settings.json` (hooks) | `openclaude mcp list`, `openclaude skills list` |
 | Codex | `~/.agents/skills` (os mesmos symlinks do Cursor e do Hermes); `~/.codex/config.toml` (MCP `ai-memory` e `serena`); `~/.codex/hooks.json` (hooks) | `codex mcp list`, `/mcp` e `/skills` dentro da sessão |
 

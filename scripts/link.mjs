@@ -15,6 +15,7 @@ import {
   backupFile,
   confirm,
   expandHome,
+  hermesProfiles,
   isMain,
   listSkills,
   log,
@@ -25,7 +26,6 @@ import {
   setAssumeYes,
   skillRoots,
   tilde,
-  which,
   writeCodexPolicy,
   writeJSON,
 } from './lib.mjs';
@@ -155,62 +155,62 @@ export async function link({ dryRun = false, agents, noClaudeDir = false, unlink
   }
 
   if (!dryRun) writeJSON(statePath, { roots: unlink ? [] : roots.map((r) => r.dir) });
-  if (agents.includes('hermes') && !unlink) await ensureHermesDir({ dryRun });
+  if (agents.includes('hermes') && !unlink) {
+    log.step('Hermes: skills.external_dirs');
+    const profiles = hermesProfiles();
+    if (!profiles.length) log.warn(`hermes não está no PATH; adicione ${HERMES_DIR} em skills.external_dirs do ~/.hermes/config.yaml`);
+    for (const h of profiles) await ensureHermesDir(h, { dryRun });
+  }
   if (unlink && agents.includes('hermes'))
     log.info(`Hermes: ${HERMES_DIR} continua em skills.external_dirs (remova com "hermes config edit" se quiser).`);
   if (skipped) log.warn(`${skipped} entrada(s) existente(s) preservada(s); confira os avisos acima`);
   return 0;
 }
 
-// Garante ~/.agents/skills em skills.external_dirs do Hermes.
-async function ensureHermesDir({ dryRun }) {
-  log.step('Hermes: skills.external_dirs');
-  const bin = which('hermes');
-  if (!bin) {
-    log.warn(`hermes não está no PATH; adicione ${HERMES_DIR} em skills.external_dirs do ~/.hermes/config.yaml`);
-    return;
-  }
-  const r = run(bin, ['config', 'get', 'skills.external_dirs', '--json']);
+// Garante ~/.agents/skills em skills.external_dirs de um perfil do Hermes.
+async function ensureHermesDir(h, { dryRun }) {
+  const hermes = (args) => run(h.bin, [...h.args, ...args]);
+  const r = hermes(['config', 'get', 'skills.external_dirs', '--json']);
   let current = [];
   try {
     const v = JSON.parse(r.stdout.trim() || 'null');
     current = v == null || v === '' ? [] : Array.isArray(v) ? v : [v];
   } catch {
-    log.warn(`não consegui ler skills.external_dirs (${r.stderr.trim() || r.stdout.trim()}); configure à mão`);
+    log.warn(`${h.label}: não consegui ler skills.external_dirs (${r.stderr.trim() || r.stdout.trim()}); configure à mão`);
     return;
   }
   const wanted = expandHome(HERMES_DIR);
   if (current.some((d) => path.resolve(expandHome(String(d))) === wanted)) {
-    log.ok(`${HERMES_DIR} já está em skills.external_dirs`);
+    log.ok(`${h.label}: ${HERMES_DIR} já está em skills.external_dirs`);
     return;
   }
   if (current.length) {
-    log.warn(`skills.external_dirs já tem ${JSON.stringify(current)}; acrescente ${HERMES_DIR} com "hermes config edit"`);
+    log.warn(`${h.label}: skills.external_dirs já tem ${JSON.stringify(current)}; acrescente ${HERMES_DIR} com "hermes ${h.args.join(' ')} config edit"`);
     return;
   }
-  if (!dryRun && !(await confirm(`Gravar skills.external_dirs = ${HERMES_DIR} na config do Hermes?`))) return;
-  const cfg = run(bin, ['config', 'path']).stdout.trim();
+  if (!dryRun && !(await confirm(`${h.label}: gravar skills.external_dirs = ${HERMES_DIR}?`))) return;
+  const cfg = hermes(['config', 'path']).stdout.trim();
   if (cfg) backupFile(cfg, { dryRun });
   const literal = JSON.stringify([HERMES_DIR]);
-  if (dryRun) return log.dry(`hermes config set skills.external_dirs '${literal}'`);
+  if (dryRun) return log.dry(`hermes ${h.args.join(' ')} config set skills.external_dirs '${literal}'`);
   // Hermes 0.21+ exige lista e aceita literal JSON; versões antigas gravam o literal como
   // texto, mas aceitam o caminho puro. Tenta a lista, confere e cai para o texto se precisar.
   const read = () => {
     try {
-      return JSON.parse(run(bin, ['config', 'get', 'skills.external_dirs', '--json']).stdout.trim() || 'null');
+      return JSON.parse(hermes(['config', 'get', 'skills.external_dirs', '--json']).stdout.trim() || 'null');
     } catch {
       return null;
     }
   };
-  let set = run(bin, ['config', 'set', 'skills.external_dirs', literal]);
+  let set = hermes(['config', 'set', 'skills.external_dirs', literal]);
   let value = read();
   if (!(Array.isArray(value) && value.includes(HERMES_DIR))) {
-    set = run(bin, ['config', 'set', 'skills.external_dirs', HERMES_DIR]);
+    set = hermes(['config', 'set', 'skills.external_dirs', HERMES_DIR]);
     value = read();
   }
   const okValue = Array.isArray(value) ? value.includes(HERMES_DIR) : value === HERMES_DIR;
-  if (okValue) log.ok(`skills.external_dirs = ${JSON.stringify(value)}`);
-  else log.err(`hermes config set falhou: ${(set.stderr || set.stdout).trim()}`);
+  if (okValue) log.ok(`${h.label}: skills.external_dirs = ${JSON.stringify(value)}`);
+  else log.err(`${h.label}: hermes config set falhou: ${(set.stderr || set.stdout).trim()}`);
 }
 
 if (isMain(import.meta.url)) {

@@ -15,6 +15,7 @@ import {
   REPO,
   backupFile,
   checkHermes,
+  hermesProfiles,
   confirm,
   die,
   findClaudeBinary,
@@ -247,24 +248,27 @@ async function wireAgents(bin, agents, { dryRun }) {
   }
 
   if (agents.includes('hermes')) {
-    const hermes = which('hermes');
-    const current = hermes && run(hermes, ['config', 'get', 'mcp_servers.serena', '--json']);
-    let entry = null;
-    try {
-      entry = current?.code === 0 ? JSON.parse(current.stdout) : null;
-    } catch {}
-    const args = (entry?.args || []).join(' ');
-    if (!hermes) log.warn('hermes não está no PATH; pulei');
-    else if (entry && argsOk(args, 'hermes')) log.ok('hermes: serena já registrado');
-    else {
-      if (entry) log.warn(`hermes: serena já registrado com outros argumentos: ${args || '(sem argumentos)'}`);
-      const question = entry ? 'hermes: trocar pelo registro do glossary?' : 'hermes: registrar o serena (hermes mcp add)?';
+    const profiles = hermesProfiles();
+    if (!profiles.length) log.warn('hermes não está no PATH; pulei');
+    for (const h of profiles) {
+      const current = run(h.bin, [...h.args, 'config', 'get', 'mcp_servers.serena', '--json']);
+      let entry = null;
+      try {
+        entry = current.code === 0 ? JSON.parse(current.stdout) : null;
+      } catch {}
+      const args = (entry?.args || []).join(' ');
+      if (entry && argsOk(args, 'hermes')) {
+        log.ok(`${h.label}: serena já registrado`);
+        continue;
+      }
+      if (entry) log.warn(`${h.label}: serena já registrado com outros argumentos: ${args || '(sem argumentos)'}`);
+      const question = entry ? `${h.label}: trocar pelo registro do glossary?` : `${h.label}: registrar o serena (hermes mcp add)?`;
       if (dryRun || (await confirm(question))) {
-        backupFile(run(hermes, ['config', 'path']).stdout.trim(), { dryRun });
-        if (entry) runWithAnswers(hermes, ['mcp', 'remove', 'serena'], 'y\n', { dryRun });
+        backupFile(run(h.bin, [...h.args, 'config', 'path']).stdout.trim(), { dryRun });
+        if (entry) runWithAnswers(h.bin, [...h.args, 'mcp', 'remove', 'serena'], 'y\n', { dryRun });
         // Pergunta do Hermes: "habilitar todas as ferramentas?" (ou "salvar mesmo assim?") -> y.
-        runWithAnswers(hermes, ['mcp', 'add', 'serena', '--command', bin, '--args', ...serenaArgs('hermes')], 'y\n', { dryRun });
-        if (!dryRun) checkHermes(hermes, 'serena');
+        runWithAnswers(h.bin, [...h.args, 'mcp', 'add', 'serena', '--command', bin, '--args', ...serenaArgs('hermes')], 'y\n', { dryRun });
+        if (!dryRun) checkHermes(h, 'serena');
       }
     }
   }
@@ -370,8 +374,8 @@ async function uninstall(agents, { dryRun }) {
       }
     }
   }
-  const hermes = agents.includes('hermes') && which('hermes');
-  if (hermes) runWithAnswers(hermes, ['mcp', 'remove', 'serena'], 'y\n', { dryRun });
+  for (const h of agents.includes('hermes') ? hermesProfiles() : [])
+    runWithAnswers(h.bin, [...h.args, 'mcp', 'remove', 'serena'], 'y\n', { dryRun });
   if (agents.includes('codex')) {
     const codex = which('codex');
     const cfg = path.join(CODEX_HOME, 'config.toml');
