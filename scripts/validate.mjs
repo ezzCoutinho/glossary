@@ -56,8 +56,7 @@ export function checkSkill(skill, { hermes = false } = {}) {
 
 // Validador oficial (agentskills.io). Ele não conhece os dois campos extras que
 // aceitamos de propósito; esse aviso específico é ignorado, o resto vira erro.
-function skillsRef(skill, { hermes = false } = {}) {
-  const known = hermes ? [...EXTRA_FIELDS, ...HERMES_FIELDS] : EXTRA_FIELDS;
+function skillsRef(skill) {
   const bin = which('skills-ref') || which('agentskills');
   if (!bin) return null;
   const r = run(bin, ['validate', skill.dir]);
@@ -68,7 +67,7 @@ function skillsRef(skill, { hermes = false } = {}) {
     .map((l) => l.replace(/^\s+-\s/, '').trim())
     .filter((l) => {
       const m = /^Unexpected fields in frontmatter: ([^.]+)\./.exec(l);
-      return !(m && m[1].split(',').every((f) => known.includes(f.trim())));
+      return !(m && m[1].split(',').every((f) => EXTRA_FIELDS.includes(f.trim())));
     });
 }
 
@@ -97,8 +96,10 @@ export function validate({ useSkillsRef = false, includeExtra = true } = {}) {
       // Só nas skills do repositório: nas raízes privadas o link.mjs cria o arquivo sozinho.
       if (root.label === 'skills' && needsCodexPolicy(skill.dir))
         error(`${where}: falta ${CODEX_POLICY_FILE} (o Codex ignora disable-model-invocation); rode node scripts/link.mjs`);
-      if (useSkillsRef && root.own) {
-        const ref = skillsRef(skill, { hermes: root.extra });
+      // Não nas raízes privadas: o Hermes grava listas no formato [a, b], que o YAML estrito do
+      // skills-ref recusa. Lá valem só as regras acima.
+      if (useSkillsRef && root.own && !root.extra) {
+        const ref = skillsRef(skill);
         if (ref === null) refMissing = true;
         else for (const p of ref) error(`${where}: skills-ref: ${p}`);
       }

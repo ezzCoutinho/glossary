@@ -366,7 +366,7 @@ export function listSkills(root, { nested = false } = {}) {
     const dir = path.join(root, e.name);
     if (fs.existsSync(path.join(dir, 'SKILL.md'))) out.push({ name: e.name, dir });
     // Pasta com ponto (.archive, .git) nunca é categoria.
-    else if (nested && !e.name.startsWith('.') && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
+    else if (nested && !e.name.startsWith('.') && fs.existsSync(dir) && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
