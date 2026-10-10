@@ -3,32 +3,38 @@
     "ponytail": {
       "repo": "https://github.com/dietrichgebert/ponytail.git",
       "ref": "main",
-      "commit": "cd765194f5e625d2f96e80e63df1c1af0b03705b",
-      "committed": "2026-10-05",
+      "commit": "9b58c1ffb790c075ca32e70a89cf1d80588f4abf",
+      "committed": "2026-10-10",
       "skills": {
         "ponytail": {
           "path": "skills/ponytail",
-          "sha256": "388ec42c9551f47d12555b1723b1af67b8fe18a8afbea0a8db96cfb870eb3803"
+          "sha256": "b71113d54bb6002fab52885bae73378d37dd4b6c1689dab0af47dc7d20df0bb2"
         },
         "ponytail-audit": {
           "path": "skills/ponytail-audit",
-          "sha256": "b8d3f82de6f677c11a3e758332e8fc668f1e8236a2466e1884bc08e07bcabcd2"
+          "sha256": "e06adf4f4ee04dc135b8ff0ce9f168590c0540c69c02fc76400b6ad3bb11f10e"
         },
         "ponytail-debt": {
           "path": "skills/ponytail-debt",
-          "sha256": "aaf702af501b4261de8ab501dc61853a8059a6a8a52b3b8823c97cd0901f67f9"
+          "sha256": "5502427c6b2ea3f57ed9b6d3cd4de980d66fe927cb4bc151497e690176dbdb8f"
         },
         "ponytail-gain": {
           "path": "skills/ponytail-gain",
-          "sha256": "c253e02de47ad3de9d586dcdb3603fa4033f23c9c2aba06ec9341d80c1554f34"
+          "sha256": "c5ac2a5e5222a6784c74e8d229dfc8dda14097a7d9ed44e93279198482929897"
         },
         "ponytail-help": {
           "path": "skills/ponytail-help",
-          "sha256": "5c21368d626df8a7c47f61f3d0edf0a8c909a923cf1a7e221fb2354483bcba06"
+          "sha256": "213ff356407b2a4df58ab9e5b6793b66fcfd177bb81159f9b0566b54606c3c7b"
         },
         "ponytail-review": {
           "path": "skills/ponytail-review",
-          "sha256": "e27ce245ef37f27183d5815e3c28d45c46a6a665ba8e5b75b172d182c72924eb"
+          "sha256": "0a56beb5b3b9b89b363ce5d0a9ae5263cd431a6ecc9b3f57d7e795a889d626fd"
+        }
+      },
+      "files": {
+        "AGENTS.md": {
+          "path": "AGENTS.md",
+          "sha256": "b98b15e1d683ee205e124b52b8d330128593f4a87b545cf8185e2712cd1bb25f"
         }
       }
     },

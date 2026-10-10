@@ -20,6 +20,7 @@ import {
   parseFrontmatter,
   readJSON,
   run,
+  sha256File,
   skillRoots,
   which,
 } from './lib.mjs';
@@ -113,6 +114,12 @@ export function validate({ useSkillsRef = false, includeExtra = true } = {}) {
           error(`${root.label}/${skill.name}: conteúdo difere do lock. vendor/ é cópia fiel; edite na fonte ou rode scripts/sync.mjs`);
       }
       for (const name of Object.keys(locked)) if (!names.has(name)) error(`${root.label}/${name}: está no lock mas a pasta sumiu`);
+      // Arquivos avulsos da fonte (ex.: vendor/ponytail/AGENTS.md): mesma regra de cópia fiel.
+      for (const [name, f] of Object.entries(lock.skills?.[root.source]?.files || {})) {
+        const file = path.join(root.dir, name);
+        if (!fs.existsSync(file)) error(`${root.label}/${name}: está no lock mas o arquivo sumiu`);
+        else if (sha256File(file) !== f.sha256) error(`${root.label}/${name}: conteúdo difere do lock; rode scripts/sync.mjs`);
+      }
     }
   }
   if (refMissing) error('--skills-ref pedido, mas skills-ref não está instalado (uv tool install skills-ref)');

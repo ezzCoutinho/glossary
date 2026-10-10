@@ -5,7 +5,10 @@
       "repo": "https://github.com/dietrichgebert/ponytail.git",
       "ref": "main",
       "license": "MIT",
-      "dir": "skills"
+      "dir": "skills",
+      "files": [
+        "AGENTS.md"
+      ]
     },
     {
       "id": "mattpocock",

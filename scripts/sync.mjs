@@ -3,15 +3,16 @@
 //
 //   node scripts/sync.mjs [--dry-run] [--only ponytail,mattpocock,ai-memory,serena] [--summary arquivo.md]
 //
-// Cada fonte de skills: clone raso e esparso, cópia fiel das skills listadas,
-// LICENSE + NOTICE.md e sha256 de cada skill no sources.lock.json. No fim roda o
+// Cada fonte de skills: clone raso e esparso, cópia fiel das skills listadas (e dos arquivos
+// avulsos em "files", ex.: o AGENTS.md do ponytail), LICENSE + NOTICE.md e sha256 de cada um no
+// sources.lock.json. No fim roda o
 // guard em vendor/; se algo bater, sai com erro (a Action não abre o PR).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { guard } from './guard.mjs';
-import { REPO, compareVersions, copyDir, hashDir, isMain, listSkills, log, readJSON, run, writeJSON } from './lib.mjs';
+import { REPO, compareVersions, copyDir, hashDir, isMain, listSkills, log, readJSON, run, sha256File, writeJSON } from './lib.mjs';
 
 const SOURCES = path.join(REPO, 'sources.json');
 const LOCK = path.join(REPO, 'sources.lock.json');
@@ -43,13 +44,16 @@ function fetchSource(src, tmp) {
     paths = src.paths;
     git(['sparse-checkout', 'set', ...paths], dir);
   }
+  // Arquivos da raiz já vêm no sparse-checkout (modo cone); os de subpasta precisam entrar.
+  const nested = (src.files || []).filter((f) => f.includes('/'));
+  if (nested.length) git(['sparse-checkout', 'add', ...new Set(nested.map((f) => path.posix.dirname(f)))], dir);
   const commit = git(['rev-parse', 'HEAD'], dir);
   const committed = git(['log', '-1', '--format=%cs'], dir);
   const license = fs.readdirSync(dir).find((f) => /^(LICENSE|LICENCE|COPYING)(\.(md|txt))?$/i.test(f));
   return { dir, paths, commit, committed, license };
 }
 
-function notice(src, fetched, skills) {
+function notice(src, fetched, skills, files) {
   const url = src.repo.replace(/\.git$/, '');
   const copyright = fetched.license
     ? fs.readFileSync(path.join(fetched.dir, fetched.license), 'utf8').split(/\r?\n/).find((l) => /copyright/i.test(l))?.trim()
@@ -67,6 +71,7 @@ function notice(src, fetched, skills) {
     '| Skill | Caminho na fonte |',
     '|---|---|',
     ...skills.map((s) => `| ${s.name} | \`${s.path}\` |`),
+    ...(files.length ? ['', '| Arquivo | Caminho na fonte |', '|---|---|', ...files.map((f) => `| ${path.posix.basename(f)} | \`${f}\` |`)] : []),
     '',
   ].join('\n');
 }
@@ -84,9 +89,14 @@ function syncSkills(src, lock, { dryRun, tmp, changes }) {
   const staging = path.join(tmp, `${src.id}-out`);
   fs.mkdirSync(staging);
   for (const s of skills) copyDir(s.abs, path.join(staging, s.name));
+  const files = src.files || [];
+  for (const f of files) {
+    if (!fs.existsSync(path.join(fetched.dir, f))) throw new Error(`arquivo não existe na fonte: ${f}`);
+    fs.copyFileSync(path.join(fetched.dir, f), path.join(staging, path.posix.basename(f)));
+  }
   if (fetched.license) fs.copyFileSync(path.join(fetched.dir, fetched.license), path.join(staging, 'LICENSE'));
   else log.warn('fonte sem arquivo LICENSE na raiz');
-  fs.writeFileSync(path.join(staging, 'NOTICE.md'), notice(src, fetched, skills));
+  fs.writeFileSync(path.join(staging, 'NOTICE.md'), notice(src, fetched, skills, files));
 
   const before = lock.skills[src.id]?.skills || {};
   const after = Object.fromEntries(skills.map((s) => [s.name, { path: s.path, sha256: hashDir(path.join(staging, s.name)) }]));
@@ -107,7 +117,9 @@ function syncSkills(src, lock, { dryRun, tmp, changes }) {
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   copyDir(staging, dest);
+  const lockedFiles = Object.fromEntries(files.map((f) => [path.posix.basename(f), { path: f, sha256: sha256File(path.join(dest, path.posix.basename(f))) }]));
   lock.skills[src.id] = { repo: src.repo, ref: src.ref, commit: fetched.commit, committed: fetched.committed, skills: after };
+  if (files.length) lock.skills[src.id].files = lockedFiles;
 }
 
 function latestTag(repo) {

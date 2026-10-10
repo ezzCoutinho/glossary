@@ -3,7 +3,7 @@
 Cópia fiel, sem alterações, de skills de https://github.com/dietrichgebert/ponytail.
 
 - Fonte: https://github.com/dietrichgebert/ponytail
-- Commit: cd765194f5e625d2f96e80e63df1c1af0b03705b (2026-10-05)
+- Commit: 9b58c1ffb790c075ca32e70a89cf1d80588f4abf (2026-10-10)
 - Licença: MIT, Copyright (c) 2026 DietrichGebert. Texto completo em LICENSE.
 - Atualizado por `scripts/sync.mjs`. Não edite à mão: o `validate.mjs` confere cada skill pelo `sources.lock.json`.
 
@@ -15,3 +15,7 @@ Cópia fiel, sem alterações, de skills de https://github.com/dietrichgebert/po
 | ponytail-gain | `skills/ponytail-gain` |
 | ponytail-help | `skills/ponytail-help` |
 | ponytail-review | `skills/ponytail-review` |
+
+| Arquivo | Caminho na fonte |
+|---|---|
+| AGENTS.md | `AGENTS.md` |
