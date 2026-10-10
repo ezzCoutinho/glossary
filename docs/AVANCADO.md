@@ -61,7 +61,7 @@ O dry-run mostra cada symlink que seria criado, sem mudar nada. A execução rea
 
 1. **Valida** todas as skills (`scripts/validate.mjs`).
 2. **Cria um symlink por skill** em `~/.agents/skills`, `~/.claude/skills` e `~/.openclaude/skills`, conforme os agentes. Nunca mexe em pasta que já existe nem em symlink que aponte para fora do glossary. Remove só symlinks órfãos que ele mesmo criou.
-3. **No Hermes**, pergunta antes de gravar `~/.agents/skills` em `skills.external_dirs`.
+3. **No Hermes**, em cada perfil, pergunta antes de gravar em `skills.external_dirs` o `~/.agents/skills` e o repositório privado, e antes de apontar `skills.create_dir` para o repositório privado. O privado entra pela pasta real porque o Hermes não segue symlink quando procura a skill que vai editar. Com o `create_dir`, as skills que o Hermes cria já nascem no repositório privado, inclusive com categoria (`skills/<categoria>/<nome>`). Para elas chegarem aos outros agentes, rode `node scripts/link.mjs`.
 4. **Ativa a trava de pre-commit** neste repositório (`git config core.hooksPath .githooks`).
 
 Para conferir:
@@ -290,7 +290,7 @@ Os três aceitam `--dry-run`. Os dados do ai-memory e a config do Serena ficam o
 
 - **Skill duplicada no Cursor**: o Cursor lê `~/.agents/skills` e também `~/.claude/skills`. Se a lista mostrar tudo em dobro, rode `node glossary.mjs --only skills --no-claude-dir`. Isso tira os links de `~/.claude/skills`, e o Claude Code deixa de ver as skills do glossary.
 - **`/code-review` do Claude escondido**: o `code-review` do mattpocock é excluído do `~/.claude/skills` em `link.json`. Se apareceu, veja `ls -la ~/.claude/skills/code-review` e rode `node scripts/link.mjs`.
-- **Hermes editando skill**: o Hermes pode alterar skills em `external_dirs`. A mudança aparece no `git status` do glossary. Em `vendor/`, o `validate.mjs` acusa a diferença; desfaça com `git checkout -- vendor`.
+- **Hermes editando skill**: o Hermes só edita e cria skills no repositório privado, pela pasta real em `external_dirs` e pelo `create_dir`. A mudança aparece no `git status` do repositório privado. Nas raízes privadas, o `validate.mjs` aceita os campos `version` e `platforms`, que o Hermes costuma pôr no cabeçalho. As de `skills/` e `vendor/` chegam ao Hermes só por symlink, e ele não as edita.
 - **Hermes diz "streamable_http is not available"**: falta o suporte a MCP via HTTP. Reinstale o Hermes com o extra `mcp` (por exemplo, `uv tool install --force 'hermes-agent[mcp]'`) e rode `hermes mcp test ai-memory`.
 - **Porta 49374 ocupada**: `lsof -iTCP:49374 -sTCP:LISTEN` mostra quem está usando. Em geral é um `ai-memory serve` esquecido num terminal.
 - **`setup-token` falha**: ele exige assinatura Claude Pro ou Max. Sem ela, use `--llm none` ou `--llm anthropic`.

@@ -103,7 +103,7 @@ export function exportPrivate(out = path.join(HOME, 'glossary-privado.tar.gz')) 
     writeJSON(path.join(stage, 'manifest.json'), manifest);
     tar(['czf', out, '-C', stage, '.']);
     fs.chmodSync(out, 0o600);
-    const skills = manifest.roots.reduce((n, r) => n + listSkills(path.join(stage, 'repos', r.repo, r.sub)).length, 0);
+    const skills = manifest.roots.reduce((n, r) => n + listSkills(path.join(stage, 'repos', r.repo, r.sub), { nested: true }).length, 0);
     log.ok(`${tilde(out)}: ${skills} skill(s) privada(s) e ${configs.length} arquivo(s) de config`);
     log.warn('O pacote tem dados da empresa. Leve por pendrive ou pela rede local (scp), nunca por nuvem, e-mail ou mensageiro.');
     log.info(`No outro computador: ./install.sh --import ${tilde(out)}. Depois apague o pacote nos dois.`);

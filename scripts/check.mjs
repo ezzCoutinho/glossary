@@ -28,6 +28,7 @@ import {
   CONFIG_DIR,
   HOME,
   REPO,
+  expandHome,
   extraRoots,
   findClaudeBinary,
   hermesProfiles,
@@ -76,16 +77,32 @@ export async function check({ agents } = {}) {
   }
   const roots = extraRoots();
   for (const r of roots)
-    fs.existsSync(r.dir) ? ok(`privadas: ${tilde(r.dir)} (${listSkills(r.dir).length} skill(s))`) : bad(`privadas: ${tilde(r.dir)} não existe (rode ./install.sh)`);
+    fs.existsSync(r.dir) ? ok(`privadas: ${tilde(r.dir)} (${listSkills(r.dir, { nested: true }).length} skill(s))`) : bad(`privadas: ${tilde(r.dir)} não existe (rode ./install.sh)`);
   if (!roots.length) warn('sem repositório privado (rode ./install.sh)');
   if (!fs.existsSync(DENY_FILE)) warn(`sem a lista de nomes da empresa (${tilde(DENY_FILE)}): a trava de commit só pega os padrões genéricos (rode ./install.sh)`);
   if (agents.includes('hermes')) {
     const profiles = hermesProfiles();
     if (!profiles.length) warn('hermes: não está no PATH');
+    // As raízes privadas entram como pasta real: é por elas que o Hermes edita e cria skills.
+    const privateDirs = roots.filter((r) => fs.existsSync(r.dir) && (!r.agents || r.agents.includes('hermes'))).map((r) => tilde(r.dir));
+    const get = (h, key) => {
+      try {
+        return JSON.parse(run(h.bin, [...h.args, 'config', 'get', key, '--json']).stdout.trim() || 'null');
+      } catch {
+        return null;
+      }
+    };
+    const same = (a, b) => path.resolve(expandHome(String(a))) === path.resolve(expandHome(String(b)));
     for (const h of profiles) {
-      const r = run(h.bin, [...h.args, 'config', 'get', 'skills.external_dirs', '--json']);
-      if (r.stdout.includes('.agents/skills')) ok(`${h.label}: lê ~/.agents/skills`);
-      else bad(`${h.label}: skills.external_dirs sem ~/.agents/skills (rode: node scripts/link.mjs)`);
+      const v = get(h, 'skills.external_dirs');
+      const dirs = Array.isArray(v) ? v : v ? [v] : [];
+      const missing = ['~/.agents/skills', ...privateDirs].filter((d) => !dirs.some((c) => same(c, d)));
+      if (missing.length) bad(`${h.label}: skills.external_dirs sem ${missing.join(', ')} (rode: node scripts/link.mjs)`);
+      else ok(`${h.label}: lê ${['~/.agents/skills', ...privateDirs].join(' e ')}`);
+      if (!privateDirs.length) continue;
+      const create = get(h, 'skills.create_dir');
+      if (create && same(create, privateDirs[0])) ok(`${h.label}: skills novas vão para ${privateDirs[0]}`);
+      else warn(`${h.label}: skills novas vão para ${create || '~/.hermes/skills'}, fora do glossary (rode: node scripts/link.mjs)`);
     }
   }
 

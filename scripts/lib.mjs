@@ -335,14 +335,18 @@ export function writeCodexPolicy(skillDir) {
   fs.writeFileSync(file, CODEX_POLICY_TEXT);
 }
 
-// Pastas com SKILL.md diretamente dentro da raiz.
-export function listSkills(root) {
+// Pastas com SKILL.md diretamente dentro da raiz. Com nested, também <raiz>/<categoria>/<nome>:
+// é como o Hermes cria skill com categoria no repositório privado (skills.create_dir).
+export function listSkills(root, { nested = false } = {}) {
   if (!fs.existsSync(root)) return [];
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && fs.existsSync(path.join(root, e.name, 'SKILL.md')))
-    .map((e) => ({ name: e.name, dir: path.join(root, e.name) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const out = [];
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+    const dir = path.join(root, e.name);
+    if (fs.existsSync(path.join(dir, 'SKILL.md'))) out.push({ name: e.name, dir });
+    else if (nested && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Frontmatter YAML simplificado: chaves de primeiro nível, escalares simples,

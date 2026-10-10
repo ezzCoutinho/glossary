@@ -27,15 +27,18 @@ import {
 const SPEC_FIELDS = ['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools'];
 const EXTRA_FIELDS = ['disable-model-invocation', 'argument-hint'];
 const ALLOWED = new Set([...SPEC_FIELDS, ...EXTRA_FIELDS]);
+// Campos que o Hermes põe nas skills que ele cria e edita (só nas raízes privadas, onde ele grava).
+// Os outros agentes ignoram campos que não conhecem.
+const HERMES_FIELDS = ['version', 'platforms'];
 const MAX_LINES = 500;
 
-export function checkSkill(skill) {
+export function checkSkill(skill, { hermes = false } = {}) {
   const problems = [];
   const file = path.join(skill.dir, 'SKILL.md');
   const text = fs.readFileSync(file, 'utf8');
   const fm = parseFrontmatter(text);
   if (!fm) return ['SKILL.md sem frontmatter (--- no topo)'];
-  const extra = fm.keys.filter((k) => !ALLOWED.has(k));
+  const extra = fm.keys.filter((k) => !ALLOWED.has(k) && !(hermes && HERMES_FIELDS.includes(k)));
   if (extra.length) problems.push(`campo(s) não permitido(s): ${extra.join(', ')}`);
   const { name, description } = fm.data;
   if (typeof name !== 'string' || !name) problems.push('falta "name"');
@@ -53,7 +56,8 @@ export function checkSkill(skill) {
 
 // Validador oficial (agentskills.io). Ele não conhece os dois campos extras que
 // aceitamos de propósito; esse aviso específico é ignorado, o resto vira erro.
-function skillsRef(skill) {
+function skillsRef(skill, { hermes = false } = {}) {
+  const known = hermes ? [...EXTRA_FIELDS, ...HERMES_FIELDS] : EXTRA_FIELDS;
   const bin = which('skills-ref') || which('agentskills');
   if (!bin) return null;
   const r = run(bin, ['validate', skill.dir]);
@@ -64,7 +68,7 @@ function skillsRef(skill) {
     .map((l) => l.replace(/^\s+-\s/, '').trim())
     .filter((l) => {
       const m = /^Unexpected fields in frontmatter: ([^.]+)\./.exec(l);
-      return !(m && m[1].split(',').every((f) => EXTRA_FIELDS.includes(f.trim())));
+      return !(m && m[1].split(',').every((f) => known.includes(f.trim())));
     });
 }
 
@@ -84,17 +88,17 @@ export function validate({ useSkillsRef = false, includeExtra = true } = {}) {
       error(`raiz do roots.json não existe: ${root.label}`);
       continue;
     }
-    const skills = listSkills(root.dir);
+    const skills = listSkills(root.dir, { nested: root.extra });
     for (const skill of skills) {
       const where = `${root.label}/${skill.name}`;
       if (seen.has(skill.name)) error(`nome repetido: ${where} e ${seen.get(skill.name)}`);
       else seen.set(skill.name, where);
-      for (const p of checkSkill(skill)) (root.own ? error : warn)(`${where}: ${p}`);
+      for (const p of checkSkill(skill, { hermes: root.extra })) (root.own ? error : warn)(`${where}: ${p}`);
       // Só nas skills do repositório: nas raízes privadas o link.mjs cria o arquivo sozinho.
       if (root.label === 'skills' && needsCodexPolicy(skill.dir))
         error(`${where}: falta ${CODEX_POLICY_FILE} (o Codex ignora disable-model-invocation); rode node scripts/link.mjs`);
       if (useSkillsRef && root.own) {
-        const ref = skillsRef(skill);
+        const ref = skillsRef(skill, { hermes: root.extra });
         if (ref === null) refMissing = true;
         else for (const p of ref) error(`${where}: skills-ref: ${p}`);
       }
