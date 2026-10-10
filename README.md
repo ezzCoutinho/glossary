@@ -24,7 +24,7 @@ O instalador confere os pré-requisitos (git e Node 20+), faz as poucas pergunta
 |---|---|---|---|
 | Claude Code | `~/.claude/skills` | MCP + hooks | MCP, contexto `claude-code` |
 | Cursor | `~/.agents/skills` (e `~/.claude/skills`) | MCP + hooks | MCP, contexto `ide` |
-| Hermes | `~/.agents/skills` via `skills.external_dirs` | MCP + hooks de ferramenta | MCP, contexto `ide` |
+| Hermes (todos os perfis) | `~/.agents/skills` via `skills.external_dirs` | MCP + hooks de ferramenta | MCP, contexto `ide` |
 | OpenClaude | `~/.openclaude/skills` | MCP + hooks (se for confiável) | MCP, contexto `claude-code` |
 | Codex | `~/.agents/skills` (mesma pasta do Cursor e do Hermes) | MCP + hooks (se for confiável) | MCP, contexto `codex` |
 
@@ -42,6 +42,7 @@ scripts/check.mjs               confere a instalação inteira, sem alterar nada
 scripts/private.mjs             repositório privado: cria e leva para outro computador (--export/--import)
 scripts/validate.mjs            regras das skills (estritas nas próprias)
 scripts/link.mjs                symlinks nas pastas dos agentes (--unlink desfaz)
+scripts/hermes-hook.mjs         hook do Hermes: skill que ele cria ou apaga chega aos outros agentes
 scripts/sync.mjs                atualiza vendor/ e as versões (o PR semanal usa este)
 scripts/guard.mjs               trava contra vazamento (pre-commit e CI)
 scripts/port-cursor-commands.mjs, scripts/port-memories.mjs

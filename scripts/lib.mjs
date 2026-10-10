@@ -183,12 +183,56 @@ export function runWithAnswers(cmd, args, answers, { dryRun = false } = {}) {
   return r.status;
 }
 
-// Confere se o servidor MCP ficou registrado (e habilitado) no Hermes.
-export function checkHermes(hermes, name) {
-  const line = run(hermes, ['mcp', 'list']).stdout.split('\n').find((l) => new RegExp(`\\b${name}\\b`).test(l)) || '';
-  if (!line) log.err(`hermes: ${name} não ficou registrado; rode "hermes mcp add" à mão`);
-  else if (/disabled|desabilitado|✗/i.test(line)) log.warn(`hermes: ${name} salvo desabilitado; confira com "hermes mcp test ${name}"`);
-  else log.ok(`hermes: ${name} registrado`);
+// Perfis do Hermes: o padrão (~/.hermes) e cada ~/.hermes/profiles/<nome>. Cada perfil tem config,
+// sessões e aprovação de hooks próprias, então skills, memória e Serena são ligados em todos.
+// "-p default" fixa o padrão mesmo quando outro perfil foi escolhido com "hermes profile use".
+// Uso: run(h.bin, [...h.args, 'config', 'path']).
+export function hermesProfiles() {
+  const bin = which('hermes');
+  if (!bin) return [];
+  const base = path.join(HOME, '.hermes');
+  const dir = path.join(base, 'profiles');
+  const names = fs.existsSync(dir)
+    ? fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'config.yaml')))
+        .map((e) => e.name)
+        .sort()
+    : [];
+  return [
+    { bin, args: ['-p', 'default'], label: 'hermes', home: base },
+    ...names.map((n) => ({ bin, args: ['-p', n], label: `hermes (${n})`, home: path.join(dir, n) })),
+  ];
+}
+
+// Hooks de um evento num perfil do Hermes (pre_tool_call, post_tool_call...), lidos e gravados pelo
+// CLI dele como lista JSON. O bloco hooks: é dividido entre ai-memory e glossary: cada um troca só
+// as próprias entradas (mine) e mantém as outras. Devolve true se gravou e conferiu.
+export function hermesHooks(h, event) {
+  try {
+    const v = JSON.parse(run(h.bin, [...h.args, 'config', 'get', `hooks.${event}`, '--json']).stdout.trim() || 'null');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+export function replaceHermesHooks(h, event, mine, entries, { dryRun = false } = {}) {
+  const list = [...hermesHooks(h, event).filter((e) => !mine(String(e?.command || ''))), ...entries];
+  const literal = JSON.stringify(list);
+  if (dryRun) return log.dry(`hermes ${h.args.join(' ')} config set hooks.${event} '${literal}'`), true;
+  run(h.bin, [...h.args, 'config', 'set', `hooks.${event}`, literal]);
+  const commands = (l) => l.map((e) => e?.command).join('\n');
+  return commands(hermesHooks(h, event)) === commands(list);
+}
+
+// Confere se o servidor MCP ficou registrado (e habilitado) num perfil do Hermes.
+export function checkHermes(h, name) {
+  const line = run(h.bin, [...h.args, 'mcp', 'list']).stdout.split('\n').find((l) => new RegExp(`\\b${name}\\b`).test(l)) || '';
+  const cmd = `hermes ${h.args.join(' ')}`;
+  if (!line) log.err(`${h.label}: ${name} não ficou registrado; rode "${cmd} mcp add" à mão`);
+  else if (/disabled|desabilitado|✗/i.test(line)) log.warn(`${h.label}: ${name} salvo desabilitado; confira com "${cmd} mcp test ${name}"`);
+  else log.ok(`${h.label}: ${name} registrado`);
 }
 
 export function which(cmd) {
@@ -312,14 +356,19 @@ export function writeCodexPolicy(skillDir) {
   fs.writeFileSync(file, CODEX_POLICY_TEXT);
 }
 
-// Pastas com SKILL.md diretamente dentro da raiz.
-export function listSkills(root) {
+// Pastas com SKILL.md diretamente dentro da raiz. Com nested, também <raiz>/<categoria>/<nome>:
+// é como o Hermes cria skill com categoria no repositório privado (skills.create_dir).
+export function listSkills(root, { nested = false } = {}) {
   if (!fs.existsSync(root)) return [];
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && fs.existsSync(path.join(root, e.name, 'SKILL.md')))
-    .map((e) => ({ name: e.name, dir: path.join(root, e.name) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const out = [];
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+    const dir = path.join(root, e.name);
+    if (fs.existsSync(path.join(dir, 'SKILL.md'))) out.push({ name: e.name, dir });
+    // Pasta com ponto (.archive, .git) nunca é categoria.
+    else if (nested && !e.name.startsWith('.') && fs.existsSync(dir) && fs.statSync(dir).isDirectory()) out.push(...listSkills(dir));
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Frontmatter YAML simplificado: chaves de primeiro nível, escalares simples,

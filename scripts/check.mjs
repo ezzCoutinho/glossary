@@ -12,24 +12,26 @@ import { parseArgs } from 'node:util';
 import {
   AGENT_FILES,
   BIN,
-  HERMES_ALLOWLIST,
   MCP_URL,
   OPENCLAUDE_SETTINGS,
   codexHooksTrusted,
   hasText,
+  hermesAllowlist,
   hermesHooksWired,
   httpStatus,
   wired,
 } from '../ai-memory/setup.mjs';
 import { CONFIG as SERENA_CONFIG, argsOk, codexTomlArgs, findSerena, readList } from '../serena/setup.mjs';
-import { expectedLinks, linkTarget } from './link.mjs';
+import { HERMES_HOOK, expectedLinks, isGlossaryHook, linkTarget } from './link.mjs';
 import {
   CODEX_HOME,
   CONFIG_DIR,
   HOME,
   REPO,
+  expandHome,
   extraRoots,
   findClaudeBinary,
+  hermesProfiles,
   isMain,
   listSkills,
   localProjects,
@@ -75,15 +77,37 @@ export async function check({ agents } = {}) {
   }
   const roots = extraRoots();
   for (const r of roots)
-    fs.existsSync(r.dir) ? ok(`privadas: ${tilde(r.dir)} (${listSkills(r.dir).length} skill(s))`) : bad(`privadas: ${tilde(r.dir)} não existe (rode ./install.sh)`);
+    fs.existsSync(r.dir) ? ok(`privadas: ${tilde(r.dir)} (${listSkills(r.dir, { nested: true }).length} skill(s))`) : bad(`privadas: ${tilde(r.dir)} não existe (rode ./install.sh)`);
   if (!roots.length) warn('sem repositório privado (rode ./install.sh)');
   if (!fs.existsSync(DENY_FILE)) warn(`sem a lista de nomes da empresa (${tilde(DENY_FILE)}): a trava de commit só pega os padrões genéricos (rode ./install.sh)`);
   if (agents.includes('hermes')) {
-    const hermes = which('hermes');
-    const r = hermes ? run(hermes, ['config', 'get', 'skills.external_dirs', '--json']) : { stdout: '' };
-    if (!hermes) warn('hermes: não está no PATH');
-    else if (r.stdout.includes('.agents/skills')) ok('hermes: lê ~/.agents/skills');
-    else bad('hermes: skills.external_dirs sem ~/.agents/skills (rode: node scripts/link.mjs)');
+    const profiles = hermesProfiles();
+    if (!profiles.length) warn('hermes: não está no PATH');
+    // As raízes privadas entram como pasta real: é por elas que o Hermes edita e cria skills.
+    const privateDirs = roots.filter((r) => fs.existsSync(r.dir) && (!r.agents || r.agents.includes('hermes'))).map((r) => tilde(r.dir));
+    const get = (h, key) => {
+      try {
+        return JSON.parse(run(h.bin, [...h.args, 'config', 'get', key, '--json']).stdout.trim() || 'null');
+      } catch {
+        return null;
+      }
+    };
+    const same = (a, b) => path.resolve(expandHome(String(a))) === path.resolve(expandHome(String(b)));
+    for (const h of profiles) {
+      const v = get(h, 'skills.external_dirs');
+      const dirs = Array.isArray(v) ? v : v ? [v] : [];
+      const missing = ['~/.agents/skills', ...privateDirs].filter((d) => !dirs.some((c) => same(c, d)));
+      if (missing.length) bad(`${h.label}: skills.external_dirs sem ${missing.join(', ')} (rode: node scripts/link.mjs)`);
+      else ok(`${h.label}: lê ${['~/.agents/skills', ...privateDirs].join(' e ')}`);
+      if (!privateDirs.length) continue;
+      const create = get(h, 'skills.create_dir');
+      if (create && same(create, privateDirs[0])) ok(`${h.label}: skills novas vão para ${privateDirs[0]}`);
+      else warn(`${h.label}: skills novas vão para ${create || '~/.hermes/skills'}, fora do glossary (rode: node scripts/link.mjs)`);
+      const hook = (get(h, 'hooks.post_tool_call') || []).find((x) => isGlossaryHook(String(x?.command || '')));
+      if (!hook || hook.command !== HERMES_HOOK.command) warn(`${h.label}: sem o hook que refaz os links das skills novas (rode: node scripts/link.mjs)`);
+      else if (!hasText(hermesAllowlist(h), 'hermes-hook.mjs')) warn(`${h.label}: hook das skills ligado; abra o Hermes nesse perfil e aceite o hook`);
+      else ok(`${h.label}: skill nova do Hermes chega aos outros agentes sozinha`);
+    }
   }
 
   // ---------- ai-memory ----------
@@ -106,19 +130,21 @@ export async function check({ agents } = {}) {
     else ok(`${agent}: MCP e hooks ligados`);
   }
   if (memoryAgents.includes('hermes')) {
-    const hermes = which('hermes');
-    const r = hermes ? run(hermes, ['config', 'get', 'mcp_servers.ai-memory', '--json']) : { code: 1, stdout: '' };
-    let entry = null;
-    try {
-      entry = r.code === 0 ? JSON.parse(r.stdout) : null;
-    } catch {}
-    const config = hermes ? run(hermes, ['config', 'path']).stdout.trim() : '';
-    const hooks = Boolean(config) && hermesHooksWired(config);
-    if (!entry) bad('hermes: MCP do ai-memory não registrado');
-    else if (entry.enabled === false) warn('hermes: MCP do ai-memory registrado mas desligado (hermes mcp test ai-memory)');
-    else if (!hooks) warn('hermes: MCP ligado, mas sem os hooks que gravam as sessões (rode ./install.sh)');
-    else if (!hasText(HERMES_ALLOWLIST, 'ai-memory')) warn('hermes: MCP e hooks ligados; abra o Hermes e aceite os hooks do ai-memory');
-    else ok('hermes: MCP e hooks ligados');
+    const profiles = hermesProfiles();
+    if (!profiles.length) bad('hermes: não está no PATH');
+    for (const h of profiles) {
+      const r = run(h.bin, [...h.args, 'config', 'get', 'mcp_servers.ai-memory', '--json']);
+      let entry = null;
+      try {
+        entry = r.code === 0 ? JSON.parse(r.stdout) : null;
+      } catch {}
+      const hooks = hermesHooksWired(h);
+      if (!entry) bad(`${h.label}: MCP do ai-memory não registrado (rode ./install.sh)`);
+      else if (entry.enabled === false) warn(`${h.label}: MCP do ai-memory registrado mas desligado (hermes ${h.args.join(' ')} mcp test ai-memory)`);
+      else if (!hooks) warn(`${h.label}: MCP ligado, mas sem os hooks que gravam as sessões (rode ./install.sh)`);
+      else if (!hasText(hermesAllowlist(h), 'ai-memory')) warn(`${h.label}: MCP e hooks ligados; abra o Hermes nesse perfil e aceite os hooks do ai-memory`);
+      else ok(`${h.label}: MCP e hooks ligados`);
+    }
   }
   if (agents.includes('openclaude')) {
     const oc = which('openclaude');
@@ -155,11 +181,17 @@ export async function check({ agents } = {}) {
       const quiet = lines.some((l) => /^web_dashboard_open_on_launch:\s*false/i.test(l));
       if (central && quiet) ok(`config ajustada (${readList(lines, 'base_modes').join(', ')})`);
       else bad('config do Serena sem os ajustes (rode: node glossary.mjs --only serena)');
-      for (const agent of agents) {
-        const state = serenaRegistration(agent);
-        if (state === true) ok(`${agent}: MCP registrado`);
-        else if (state === null) warn(`${agent}: CLI não encontrada para conferir`);
-        else bad(`${agent}: ${state}`);
+      // O Hermes é conferido em cada perfil.
+      const hermes = hermesProfiles();
+      const checks = agents.flatMap((agent) =>
+        agent === 'hermes' && hermes.length
+          ? hermes.map((h) => [h.label, serenaRegistration(agent, h)])
+          : [[agent, serenaRegistration(agent)]],
+      );
+      for (const [label, state] of checks) {
+        if (state === true) ok(`${label}: MCP registrado`);
+        else if (state === null) warn(`${label}: CLI não encontrada para conferir`);
+        else bad(`${label}: ${state}`);
       }
     }
   }
@@ -171,16 +203,15 @@ export async function check({ agents } = {}) {
 }
 
 // true se o registro do Serena no agente está como o glossary grava; texto com o problema; null se não deu para conferir.
-function serenaRegistration(agent) {
+function serenaRegistration(agent, h) {
   if (agent === 'cursor') {
     const entry = readJSON(path.join(HOME, '.cursor', 'mcp.json'), {}).mcpServers?.serena;
     if (!entry) return 'MCP do Serena não registrado';
     return argsOk((entry.args || []).join(' '), agent) || 'Serena registrado com outros argumentos';
   }
   if (agent === 'hermes') {
-    const hermes = which('hermes');
-    if (!hermes) return null;
-    const r = run(hermes, ['config', 'get', 'mcp_servers.serena', '--json']);
+    if (!h) return null;
+    const r = run(h.bin, [...h.args, 'config', 'get', 'mcp_servers.serena', '--json']);
     let entry = null;
     try {
       entry = r.code === 0 ? JSON.parse(r.stdout) : null;
