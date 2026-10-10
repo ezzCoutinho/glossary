@@ -37,6 +37,26 @@ flowchart LR
   - **Pasta compartilhada**: como o Codex lê a mesma pasta do Cursor e do Hermes, uma skill privada só entra em `~/.agents/skills` se o Codex for confiável. Com "não", ela sai dessa pasta e o Hermes também deixa de vê-la (o Cursor continua vendo pela `~/.claude/skills`).
 - **Hermes**: o ai-memory grava as ferramentas que o Hermes usa (`pre_tool_call` e `post_tool_call`), num bloco `hooks:` que o instalador acrescenta ao `~/.hermes/config.yaml`. Cada perfil (`~/.hermes/profiles/<nome>`) tem config, sessões e aprovações próprias, então o glossary liga skills, memória e Serena em todos os perfis, com `hermes -p <nome>`. Na primeira sessão de cada perfil, o Hermes pede para aprovar cada hook; responda sim. As mensagens e o fim da sessão do Hermes ficariam com um plugin de memória da comunidade (`ai-memory-hermes-plugin`), que o glossary não instala. Para o handoff, o Hermes usa as ferramentas `memory_*` do MCP.
 
+## Regras gerais (AGENTS.md)
+
+Instrução que todo agente lê em toda conversa. O `link.mjs` junta três partes em `~/.config/glossary/AGENTS.md`:
+
+1. `agents/AGENTS.md`: as regras do glossary (consultar o ai-memory, onde criar skills). Os caminhos `{{SKILLS_DIR}}` e `{{GLOSSARY}}` viram os desta máquina.
+2. `vendor/ponytail/AGENTS.md`: as regras do ponytail, cópia fiel com lock (`files` no `sources.json`), precedidas de uma linha que as limita a tarefas de código.
+3. O `AGENTS.md` do repositório privado (ao lado da pasta `skills/` dele), se existir e se o `roots.json` não limitar esse repositório a só alguns agentes.
+
+Cada agente recebe o texto pelo caminho que lê:
+
+| Agente | Onde | Como |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | symlink |
+| OpenClaude | `~/.openclaude/CLAUDE.md` | symlink |
+| Codex | `~/.codex/AGENTS.md` | symlink |
+| Hermes (cada perfil) | `SOUL.md` do perfil | bloco entre marcadores no fim; o resto do SOUL fica como está |
+| Cursor | `~/.cursor/hooks.json` | hook `sessionStart` que injeta o texto (`additional_context`) |
+
+Se um desses arquivos já existir e não for do glossary, ele não é mexido: junte o conteúdo em `agents/AGENTS.md` e apague o arquivo. O texto entra em toda conversa, então mantenha `agents/AGENTS.md` curto: conhecimento específico vai para skills ou para o ai-memory. Depois de editar, rode `node scripts/link.mjs`. O `--unlink` tira os links, o bloco do SOUL e o hook do Cursor.
+
 ## Rodar as partes separadas
 
 O `./install.sh` faz as perguntas e chama o `glossary.mjs`. Ele também pode ser usado direto:

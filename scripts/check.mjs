@@ -23,6 +23,7 @@ import {
 } from '../ai-memory/setup.mjs';
 import { CONFIG as SERENA_CONFIG, argsOk, codexTomlArgs, findSerena, readList } from '../serena/setup.mjs';
 import { HERMES_HOOK, expectedLinks, isGlossaryHook, linkTarget } from './link.mjs';
+import { agentsMdStatus } from './agents-md.mjs';
 import {
   CODEX_HOME,
   CONFIG_DIR,
@@ -109,6 +110,9 @@ export async function check({ agents } = {}) {
       else ok(`${h.label}: skill nova do Hermes chega aos outros agentes sozinha`);
     }
   }
+
+  log.step('Regras gerais (AGENTS.md)');
+  for (const [label, state] of agentsMdStatus(agents)) state === true ? ok(`${label}: regras gerais em dia`) : bad(`${label}: ${state}`);
 
   // ---------- ai-memory ----------
   log.step('Memória compartilhada (ai-memory)');

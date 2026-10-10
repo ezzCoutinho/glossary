@@ -205,6 +205,19 @@ export function hermesProfiles() {
   ];
 }
 
+// Comando "node <script>" para hook de agente (Hermes, Cursor), que roda sem shell e fora deste
+// terminal. O node de uma versão instalada pelo mise/asdf/nvm/fnm/volta some na próxima
+// atualização, então fica o shim ou o do sistema que estiver no PATH. Caminho com espaço vai
+// entre aspas (o Hermes divide o comando com shlex).
+const versioned = (p) => /[/\\](mise|asdf|\.nvm|nvm|fnm|volta)[/\\](.*[/\\])?(installs|versions|node-versions)[/\\]/.test(p);
+const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'"'"'`)}'`);
+export function nodeCommand(script) {
+  const node = versioned(process.execPath)
+    ? (process.env.PATH || '').split(path.delimiter).map((d) => path.join(d, 'node')).find((p) => !versioned(p) && fs.existsSync(p))
+    : null;
+  return [node || process.execPath, script].map(quote).join(' ');
+}
+
 // Hooks de um evento num perfil do Hermes (pre_tool_call, post_tool_call...), lidos e gravados pelo
 // CLI dele como lista JSON. O bloco hooks: é dividido entre ai-memory e glossary: cada um troca só
 // as próprias entradas (mine) e mantém as outras. Devolve true se gravou e conferiu.
