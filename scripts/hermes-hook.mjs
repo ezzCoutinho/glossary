@@ -7,11 +7,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { REPO, resolveAgents } from './lib.mjs';
 
-let action = '';
+// Uma ação ({action}) ou um lote ({operations: [{action}, ...]}).
+let actions = [];
 try {
-  action = JSON.parse(fs.readFileSync(0, 'utf8')).tool_input?.action || '';
+  const input = JSON.parse(fs.readFileSync(0, 'utf8')).tool_input || {};
+  actions = [input.action, ...(Array.isArray(input.operations) ? input.operations.map((o) => o?.action) : [])];
 } catch {}
-if (['create', 'delete'].includes(action)) {
+if (actions.some((a) => a === 'create' || a === 'delete')) {
   // Sem o hermes: ele lê o repositório privado direto e a config dele já está certa.
   const agents = resolveAgents().filter((a) => a !== 'hermes');
   if (agents.length)
