@@ -5,7 +5,7 @@ Skills e memória compartilhadas por **Claude Code, Cursor, Hermes, OpenClaude e
 - **Skills**: as próprias (`skills/`) e as de terceiros (`vendor/`, cópia fiel com lockfile) numa pasta só, ligadas por symlink onde cada agente lê. Atualizar é `git pull`.
 - **Memória**: o [ai-memory](https://github.com/akitaonrails/ai-memory) captura as sessões de todos os agentes num servidor local. Dá para largar uma tarefa num agente e continuar em outro.
 - **Navegação de código**: o [Serena](https://github.com/oraios/serena) busca e edita símbolos via language server, em vez de ler arquivos inteiros.
-- **Regras gerais**: `agents/AGENTS.md` mais as regras do [ponytail](https://github.com/dietrichgebert/ponytail) chegam a todos os agentes em toda conversa (ver [AVANCADO.md](docs/AVANCADO.md#regras-gerais-agentsmd)).
+- **Regras gerais**: `agents/AGENTS.md` chega a todos os agentes em toda conversa; a skill [ponytail](https://github.com/dietrichgebert/ponytail) é consultada em tarefas de código (ver [AVANCADO.md](docs/AVANCADO.md#regras-gerais-agentsmd)).
 
 As três partes são independentes. O passo a passo está em [docs/PASSO-A-PASSO.md](docs/PASSO-A-PASSO.md), e os detalhes em [docs/AVANCADO.md](docs/AVANCADO.md).
 
@@ -44,7 +44,7 @@ scripts/private.mjs             repositório privado: cria e leva para outro com
 scripts/validate.mjs            regras das skills (estritas nas próprias)
 scripts/link.mjs                symlinks nas pastas dos agentes (--unlink desfaz)
 scripts/hermes-hook.mjs         hook do Hermes: skill que ele cria ou apaga chega aos outros agentes
-agents/AGENTS.md                regras gerais de todos os agentes (o link.mjs junta com as do ponytail)
+agents/AGENTS.md                regras gerais de todos os agentes
 scripts/agents-md.mjs           entrega as regras gerais a cada agente (e é o hook sessionStart do Cursor)
 scripts/sync.mjs                atualiza vendor/ e as versões (o PR semanal usa este)
 scripts/guard.mjs               trava contra vazamento (pre-commit e CI)
