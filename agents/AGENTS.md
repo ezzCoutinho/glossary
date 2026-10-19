@@ -3,7 +3,7 @@
 - Use a correção mais recente do usuário para atualizar o requisito e retirar a interpretação anterior do código, dos scripts e da validação afetados.
 - Preserve o significado do pedido. Se faltar uma informação que decide a regra, investigue a fonte existente; se continuar indefinida, faça uma pergunta objetiva antes de implementar essa parte.
 - Faça a menor mudança que cumpra o pedido inteiro. Um atalho documentado só serve quando preserva o comportamento solicitado.
-- Ao estender algo existente, confira todas as partes que precisam acompanhar a mudança: regra, tela, documento, totais, pagamento e demais consumidores aplicáveis.
+- Preserve a finalidade e o comportamento existente de cada tela e documento. Ao investigar uma divergência, confirme se ela é um defeito antes de igualar comportamentos. Se a correção depender de uma decisão de negócio indefinida, pergunte antes de alterar essa parte.
 - Conclua o trabalho autorizado. Descobertas fora do escopo devem ser relatadas separadamente, sem alterar cadastros ou ampliar a tarefa por conta própria.
 
 ## Verificação
