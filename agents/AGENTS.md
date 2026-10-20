@@ -23,3 +23,4 @@
 - Carregue as skills pertinentes à tarefa. Em código, siga a skill `ponytail`; as regras de simplicidade preservam todos os requisitos do pedido.
 
 - Crie skills em `{{SKILLS_DIR}}/<nome>/SKILL.md`, nunca na pasta do próprio agente. Depois rode `node {{GLOSSARY}}/scripts/link.mjs`.
+- Script avulso, referência ou documento reutilizável que você criar não fica solto no projeto em que está trabalhando: vai para a skill certa em `{{SKILLS_DIR}}/<nome>/` (`scripts/` ou `references/`), com uma linha no `SKILL.md`, e depois rode o link. Saída temporária (planilha, CSV, relatório) vai para uma pasta temporária fora do projeto. No projeto ficam só os arquivos do próprio produto que o pedido mandou criar ou alterar; se o usuário disser onde salvar, siga o usuário.
