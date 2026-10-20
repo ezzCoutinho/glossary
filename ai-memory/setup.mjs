@@ -264,6 +264,11 @@ export function launchdLoaded() {
   return run('launchctl', ['print', `gui/${process.getuid()}/${LABEL}`]).code === 0;
 }
 
+// O bootout volta antes de o serviço sair do launchd; um bootstrap nesse intervalo falha com "Input/output error".
+function waitUnloaded() {
+  for (let i = 0; i < 30 && launchdLoaded(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+}
+
 function startService(env, { dryRun, binaryChanged }) {
   log.step(MAC ? 'Serviço (launchd)' : 'Serviço (systemd --user)');
   if (MAC) {
@@ -277,7 +282,10 @@ function startService(env, { dryRun, binaryChanged }) {
     fs.mkdirSync(paths.logs, { recursive: true });
     writePrivate(paths.plist, xml);
     log.ok(`${tilde(paths.plist)} (chmod 600)`);
-    if (launchdLoaded()) runLive('launchctl', ['bootout', `gui/${process.getuid()}/${LABEL}`]);
+    if (launchdLoaded()) {
+      runLive('launchctl', ['bootout', `gui/${process.getuid()}/${LABEL}`]);
+      waitUnloaded();
+    }
     if (runLive('launchctl', ['bootstrap', `gui/${process.getuid()}`, paths.plist]) !== 0) die('launchctl bootstrap falhou');
     return;
   }
