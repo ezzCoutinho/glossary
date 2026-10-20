@@ -3,7 +3,7 @@
 Cópia fiel, sem alterações, de skills de https://github.com/dietrichgebert/ponytail.
 
 - Fonte: https://github.com/dietrichgebert/ponytail
-- Commit: 9b58c1ffb790c075ca32e70a89cf1d80588f4abf (2026-10-10)
+- Commit: 09c434ab73ca43761c5d8b0c5d341926c2fba710 (2026-10-18)
 - Licença: MIT, Copyright (c) 2026 DietrichGebert. Texto completo em LICENSE.
 - Atualizado por `scripts/sync.mjs`. Não edite à mão: o `validate.mjs` confere cada skill pelo `sources.lock.json`.
 
