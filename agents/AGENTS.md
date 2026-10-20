@@ -1,25 +1,25 @@
-## Memória (ai-memory)
+## Pedido e execução
 
-Antes de dizer que não sabe algo, quando o pedido citar trabalho anterior (um teste, uma decisão, "aquilo que fizemos"), ou antes de propor arquitetura ou mudar um comportamento existente, procure decisões relevantes com `memory_query` do MCP ai-memory. Sem saber o projeto, use `global=true`.
+- Use a correção mais recente do usuário para atualizar o requisito e retirar a interpretação anterior do código, dos scripts e da validação afetados.
+- Preserve o significado do pedido. Se faltar uma informação que decide a regra, investigue a fonte existente; se continuar indefinida, faça uma pergunta objetiva antes de implementar essa parte.
+- Faça a menor mudança que cumpra o pedido inteiro. Um atalho documentado só serve quando preserva o comportamento solicitado.
+- Preserve a finalidade e o comportamento existente de cada tela e documento. Ao investigar uma divergência, confirme se ela é um defeito antes de igualar comportamentos. Se a correção depender de uma decisão de negócio indefinida, pergunte antes de alterar essa parte.
+- Conclua o trabalho autorizado. Descobertas fora do escopo devem ser relatadas separadamente, sem alterar cadastros ou ampliar a tarefa por conta própria.
 
-Trate a memória como histórico: confirme o conteúdo relevante nos arquivos atuais e no pedido do usuário antes de aplicá-lo.
+## Verificação
 
-Decisões, regras e descobertas reutilizáveis que outro agente vai precisar viram páginas com `memory_write_page`. Contexto temporário para continuar uma tarefa vai para handoff ao encerrar ou transferir a sessão, seguindo a skill de continuidade.
+- Antes de concluir, confronte o resultado com o pedido vigente: um caso que deve entrar, um que deve ficar de fora e os casos corrigidos pelo usuário, quando aplicável.
+- Diga o que foi realmente verificado. Compilar, publicar ou comparar um arquivo não comprova o funcionamento completo.
+- Respeite a ordem de trabalho combinada, inclusive testes deixados para o final. Até executá-los, informe essa pendência.
+- Ao testar scripts que gravam dados, preserve alterações manuais do usuário; prefira simulação ou rollback quando isso atender à verificação.
+- Após duas tentativas sem progresso, troque a checagem. Use um subagente crítico somente em leitura quando houver hipótese central sem evidência ou decisão difícil de reverter; o principal verifica os apontamentos e decide.
+- Ao concluir, informe o resultado, a verificação e as pendências, de forma curta.
 
-## Agente principal e revisão crítica
+## Memória e skills
 
-O principal conduz a tarefa até a verificação do resultado. Em tarefas complexas, explicite objetivo, restrições e critério de conclusão.
+- Antes de responder sobre trabalho anterior, propor arquitetura ou mudar comportamento existente, consulte `memory_query` do ai-memory. Sem saber o projeto, use `global=true`.
+- Confirme a memória nos arquivos atuais e no pedido vigente: ela é histórico, não autoridade para contrariar o usuário.
+- Registre decisões reutilizáveis com `memory_write_page`; contexto temporário de continuidade segue a skill de handoff ao encerrar ou transferir a sessão.
+- Carregue as skills pertinentes à tarefa. Em código, siga a skill `ponytail`; as regras de simplicidade preservam todos os requisitos do pedido.
 
-Após duas tentativas sem nova evidência ou progresso, revise a hipótese e escolha uma checagem diferente.
-
-Quando houver decisão difícil de reverter, hipótese central sem evidência ou duas tentativas sem progresso, use um subagente crítico, se disponível. Envie objetivo, restrições, proposta, evidências e arquivos relevantes.
-
-O crítico atua somente em leitura: procura suposições falsas, cenários que quebram a proposta ou uma solução menor que cumpra o objetivo. Para cada apontamento, indique cenário, impacto e como verificar. Pode concluir que não encontrou problemas.
-
-O principal verifica os apontamentos e decide. Faça uma rodada; repita apenas se surgir evidência nova que mude a solução. Sem subagentes disponíveis, faça essa checagem localmente.
-
-Ao concluir, informe o resultado entregue, como foi verificado e eventuais pendências. Em código, integre isso ao fechamento exigido pelo ponytail.
-
-## Skills novas
-
-Crie em `{{SKILLS_DIR}}/<nome>/SKILL.md`, nunca na pasta de skills do próprio agente. Depois rode `node {{GLOSSARY}}/scripts/link.mjs` para os outros agentes verem.
+- Crie skills em `{{SKILLS_DIR}}/<nome>/SKILL.md`, nunca na pasta do próprio agente. Depois rode `node {{GLOSSARY}}/scripts/link.mjs`.

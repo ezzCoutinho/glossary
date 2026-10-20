@@ -39,11 +39,12 @@ flowchart LR
 
 ## Regras gerais (AGENTS.md)
 
-Instrução que todo agente lê em toda conversa. O `link.mjs` junta três partes em `~/.config/glossary/AGENTS.md`:
+Instrução que todo agente lê em toda conversa. O `link.mjs` junta duas partes em `~/.config/glossary/AGENTS.md`:
 
-1. `agents/AGENTS.md`: as regras do glossary (consultar o ai-memory, onde criar skills). Os caminhos `{{SKILLS_DIR}}` e `{{GLOSSARY}}` viram os desta máquina.
-2. `vendor/ponytail/AGENTS.md`: as regras do ponytail, cópia fiel com lock (`files` no `sources.json`), precedidas de uma linha que as limita a tarefas de código.
-3. O `AGENTS.md` do repositório privado (ao lado da pasta `skills/` dele), se existir e se o `roots.json` não limitar esse repositório a só alguns agentes.
+1. `agents/AGENTS.md`: as regras de execução, verificação, memória e skills. Os caminhos `{{SKILLS_DIR}}` e `{{GLOSSARY}}` viram os desta máquina.
+2. O `AGENTS.md` do repositório privado (ao lado da pasta `skills/` dele), se existir e se o `roots.json` não limitar esse repositório a só alguns agentes.
+
+As regras completas do ponytail ficam na skill, consultada em tarefas de código, sem serem copiadas para a instrução global. O arquivo `vendor/ponytail/AGENTS.md` continua preservado como cópia da fonte com lock.
 
 Cada agente recebe o texto pelo caminho que lê:
 

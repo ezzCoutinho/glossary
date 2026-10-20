@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Instrução global de todos os agentes: agents/AGENTS.md (regras do glossary) + as regras do
-// ponytail (vendor/ponytail/AGENTS.md) + o AGENTS.md do repositório privado, se houver. O texto
+// Instrução global de todos os agentes: agents/AGENTS.md (regras do glossary)
+// + o AGENTS.md do repositório privado, se houver. O texto
 // junto vai para ~/.config/glossary/AGENTS.md e chega a cada agente pelo caminho que ele lê:
 //   Claude Code ~/.claude/CLAUDE.md, OpenClaude ~/.openclaude/CLAUDE.md, Codex ~/.codex/AGENTS.md: symlink
 //   Hermes: bloco no fim do SOUL.md de cada perfil (o Hermes não lê AGENTS.md global)
@@ -59,7 +59,6 @@ export function buildAgentsMd() {
     .readFileSync(path.join(REPO, 'agents', 'AGENTS.md'), 'utf8')
     .replaceAll('{{SKILLS_DIR}}', tilde(roots[0]?.dir || path.join(REPO, 'skills')))
     .replaceAll('{{GLOSSARY}}', tilde(REPO));
-  const ponytail = fs.readFileSync(path.join(REPO, 'vendor', 'ponytail', 'AGENTS.md'), 'utf8');
   // O AGENTS.md do repositório privado fica ao lado da pasta skills/ dele.
   const priv = roots
     .map((r) => path.join(path.dirname(r.dir), 'AGENTS.md'))
@@ -69,9 +68,6 @@ export function buildAgentsMd() {
     `<!-- Gerado por ${tilde(path.join(REPO, 'scripts', 'link.mjs'))}: edite agents/AGENTS.md no glossary, não este arquivo. -->`,
     '# Regras gerais dos agentes',
     own.trim(),
-    // O ponytail manda fechar toda resposta com o que ficou de fora: faz sentido em código, não em conversa.
-    '## Código (ponytail)\n\nAo escrever, corrigir, revisar ou planejar código, siga as regras abaixo (cópia fiel de vendor/ponytail/AGENTS.md). Fora de código, ignore esta seção.',
-    demote(ponytail.trim(), 2),
     ...(priv.length ? [`## Regras do repositório interno\n\n${priv.map((t) => demote(t, 1)).join('\n\n')}`] : []),
   ].join('\n\n') + '\n';
 }
