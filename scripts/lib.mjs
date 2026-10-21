@@ -21,7 +21,7 @@ export function isMain(url) {
   }
 }
 
-export const AGENTS = ['claude', 'cursor', 'hermes', 'openclaude', 'codex'];
+export const AGENTS = ['claude', 'cursor', 'hermes', 'openclaude', 'codex', 'openclaw'];
 // Pasta de config do Codex (CODEX_HOME muda o padrão ~/.codex).
 export const CODEX_HOME = process.env.CODEX_HOME ? path.resolve(expandHome(process.env.CODEX_HOME)) : path.join(HOME, '.codex');
 
@@ -300,6 +300,7 @@ export function detectAgents() {
   if (which('hermes') || exists(path.join(HOME, '.hermes'))) found.push('hermes');
   if (which('openclaude') || exists(path.join(HOME, '.openclaude'))) found.push('openclaude');
   if (which('codex') || exists(CODEX_HOME)) found.push('codex');
+  if (which('openclaw') || exists(expandHome(process.env.OPENCLAW_STATE_DIR || '~/.openclaw'))) found.push('openclaw');
   return found;
 }
 

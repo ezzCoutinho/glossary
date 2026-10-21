@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Confere a instalação inteira e diz o que falta. Não altera nada.
 //
-//   node scripts/check.mjs [--agents claude,cursor,hermes,openclaude,codex]
+//   node scripts/check.mjs [--agents claude,cursor,hermes,openclaude,codex,openclaw]
 //   node glossary.mjs --check
 //
 // Usa as escolhas gravadas pelo install (~/.config/glossary/install.json), por exemplo
@@ -44,6 +44,8 @@ import {
   which,
 } from './lib.mjs';
 import { DENY_FILE } from './private.mjs';
+
+import { openclawConfig, openclawHooksWired } from './openclaw.mjs';
 
 export const INSTALL_FILE = path.join(CONFIG_DIR, 'install.json');
 
@@ -163,6 +165,14 @@ export async function check({ agents } = {}) {
     else if (registered || hooks) warn('openclaude: tem a memória ligada, mas a instalação escolheu deixá-lo de fora');
     else ok('openclaude: sem memória compartilhada (escolha da instalação)');
   }
+  if (memoryAgents.includes('openclaw')) {
+    const entry = openclawConfig().mcp?.servers?.['ai-memory'];
+    if (entry?.url === MCP_URL && entry.transport === 'streamable-http' && entry.enabled !== false) {
+      ok('openclaw: MCP do ai-memory registrado');
+      if (openclawHooksWired()) ok('openclaw: plugin de captura das sessões instalado');
+      else bad('openclaw: plugin de captura ausente, desligado ou sem acesso à conversa');
+    } else bad('openclaw: MCP do ai-memory ausente, desligado ou com outra URL');
+  }
   for (const p of localProjects().filter((p) => p.aiMemory)) {
     const marker = path.join(p.dir, '.ai-memory.toml');
     if (!fs.existsSync(p.dir)) warn(`${tilde(p.dir)}: pasta não existe`);
@@ -208,6 +218,10 @@ export async function check({ agents } = {}) {
 
 // true se o registro do Serena no agente está como o glossary grava; texto com o problema; null se não deu para conferir.
 function serenaRegistration(agent, h) {
+  if (agent === 'openclaw') {
+    const entry = openclawConfig().mcp?.servers?.serena;
+    return (entry?.enabled !== false && entry?.command && argsOk((entry.args || []).join(' '), agent)) || 'MCP do Serena ausente, desligado ou com outros argumentos';
+  }
   if (agent === 'cursor') {
     const entry = readJSON(path.join(HOME, '.cursor', 'mcp.json'), {}).mcpServers?.serena;
     if (!entry) return 'MCP do Serena não registrado';

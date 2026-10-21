@@ -2,7 +2,7 @@
   "targets": [
     {
       "dir": "~/.agents/skills",
-      "agents": ["cursor", "hermes", "codex"],
+      "agents": ["cursor", "hermes", "codex", "openclaw"],
       "exclude": []
     },
     {

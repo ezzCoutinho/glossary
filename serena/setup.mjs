@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Ajusta o Serena (versão fixada no sources.json) e registra o MCP nos agentes.
 //
-//   node serena/setup.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex]
+//   node serena/setup.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex,openclaw]
 //                         [--memories keep|off] [--trusted "<glob>"]
 //   node serena/setup.mjs --uninstall [--dry-run]   (remove o MCP dos agentes; config e projetos ficam)
 //
@@ -34,10 +34,12 @@ import {
   writeJSON,
 } from '../scripts/lib.mjs';
 
+import { wireOpenclawMcp } from '../scripts/openclaw.mjs';
+
 const SERENA_HOME = path.join(HOME, '.serena');
 export const CONFIG = path.join(SERENA_HOME, 'serena_config.yml');
 export const FOLDER_LOCATION = path.join(SERENA_HOME, 'projects', '$projectFolderName', '.serena');
-const CONTEXT = { claude: 'claude-code', openclaude: 'claude-code', cursor: 'ide', hermes: 'ide', codex: 'codex' };
+const CONTEXT = { claude: 'claude-code', openclaude: 'claude-code', cursor: 'ide', hermes: 'ide', codex: 'codex', openclaw: 'ide' };
 // O Serena demora a subir; o padrão do Codex (10 s) estoura em projeto grande.
 const CODEX_STARTUP_TIMEOUT = 15;
 
@@ -197,6 +199,7 @@ async function configureProjects(bin, { dryRun }) {
 
 async function wireAgents(bin, agents, { dryRun }) {
   log.step('Registrar o MCP do Serena nos agentes');
+  if (agents.includes('openclaw')) wireOpenclawMcp('serena', { command: bin, args: serenaArgs('openclaw') }, { dryRun });
   for (const agent of ['claude', 'openclaude']) {
     if (!agents.includes(agent)) continue;
     const cli = agent === 'claude' ? findClaudeBinary() : which('openclaude');
@@ -357,6 +360,7 @@ async function configureCodex(bin, { dryRun }) {
 
 async function uninstall(agents, { dryRun }) {
   log.step('Remover o MCP do Serena dos agentes');
+  if (agents.includes('openclaw')) wireOpenclawMcp('serena', null, { dryRun, remove: true });
   for (const agent of ['claude', 'openclaude']) {
     const cli = agents.includes(agent) && (agent === 'claude' ? findClaudeBinary() : which('openclaude'));
     if (cli) runQuiet(cli, ['mcp', 'remove', '--scope', 'user', 'serena'], { dryRun });

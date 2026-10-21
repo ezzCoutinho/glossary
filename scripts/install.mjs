@@ -54,7 +54,7 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
   // Numa nova rodada, as respostas padrão repetem as escolhas anteriores.
   const previous = readJSON(INSTALL_FILE, null);
   const agents = resolveAgents(agentsFlag);
-  if (!agents.length) die('nenhum agente encontrado (Claude Code, Cursor, Hermes ou OpenClaude). Instale um e rode de novo.');
+  if (!agents.length) die('nenhum agente encontrado (Claude Code, Cursor, Hermes, OpenClaude, Codex ou OpenClaw). Instale um e rode de novo.');
   log.info(`Agentes encontrados: ${agents.join(', ')}`);
   log.info('Responda as perguntas abaixo; depois disso a instalação roda sozinha.');
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Monta tudo em sequência: validate -> link -> ai-memory -> Serena (e sync, se pedido).
 //
-//   node glossary.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex]
+//   node glossary.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex,openclaw]
 //                     [--only skills|ai-memory|serena] [--sync] [--no-claude-dir]
 //                     [--llm none|anthropic|anthropic-oauth] [--model <id>]
 //                     [--memories keep|off] [--trusted "<glob>"]
