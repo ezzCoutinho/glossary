@@ -3,6 +3,7 @@
 // + o AGENTS.md do repositório privado, se houver. O texto
 // junto vai para ~/.config/glossary/AGENTS.md e chega a cada agente pelo caminho que ele lê:
 //   Claude Code ~/.claude/CLAUDE.md, OpenClaude ~/.openclaude/CLAUDE.md, Codex ~/.codex/AGENTS.md: symlink
+//   OpenClaw: bloco no AGENTS.md de cada workspace
 //   Hermes: bloco no fim do SOUL.md de cada perfil (o Hermes não lê AGENTS.md global)
 //   Cursor: hook sessionStart que injeta o texto (o Cursor não lê arquivo global)
 //
@@ -26,6 +27,8 @@ import {
   tilde,
   writeJSON,
 } from './lib.mjs';
+
+import { openclawWorkspaces } from './openclaw.mjs';
 
 export const AGENTS_MD = path.join(CONFIG_DIR, 'AGENTS.md');
 const LINKS = {
@@ -104,18 +107,19 @@ export function wireAgentsMd({ agents, dryRun = false, unlink = false }) {
     else act(`${agent}: ${tilde(file)} -> ${tilde(AGENTS_MD)}`, () => (fs.mkdirSync(path.dirname(file), { recursive: true }), fs.symlinkSync(AGENTS_MD, file)));
   }
 
-  for (const h of agents.includes('hermes') ? hermesProfiles() : []) {
-    const soul = path.join(h.home, 'SOUL.md');
+  const workspaces = agents.includes('openclaw') ? openclawWorkspaces().map((home) => ({ home, label: 'openclaw', file: 'AGENTS.md' })) : [];
+  for (const h of [...(agents.includes('hermes') ? hermesProfiles() : []), ...workspaces]) {
+    const soul = path.join(h.home, h.file || 'SOUL.md');
     const before = fs.existsSync(soul) ? fs.readFileSync(soul, 'utf8') : '';
     const b = soulBlock(before);
     const rest = (b ? before.slice(0, b.start) + before.slice(b.end) : before).trimEnd();
     const after = unlink ? `${rest.trimEnd()}\n` : `${rest ? `${rest}\n\n` : ''}${BEGIN}\n${text}${END}\n`;
     if (after === before || (unlink && !b)) {
-      if (!unlink) log.ok(`${h.label}: SOUL.md já tem as regras gerais`);
+      if (!unlink) log.ok(`${h.label}: ${h.file || 'SOUL.md'} já tem as regras gerais`);
       continue;
     }
     if (!dryRun && fs.existsSync(soul)) backupFile(soul);
-    act(`${h.label}: regras gerais ${unlink ? 'tiradas do' : 'no fim do'} ${tilde(soul)}`, () => fs.writeFileSync(soul, after));
+    act(`${h.label}: regras gerais ${unlink ? 'tiradas do' : 'no fim do'} ${tilde(soul)}`, () => (fs.mkdirSync(h.home, { recursive: true }), fs.writeFileSync(soul, after)));
   }
 
   if (agents.includes('cursor') && (fs.existsSync(CURSOR_HOOKS) || !unlink)) {
@@ -142,11 +146,12 @@ export function agentsMdStatus(agents) {
   out.push([tilde(AGENTS_MD), fresh || 'desatualizado ou ausente (rode: node scripts/link.mjs)']);
   for (const [agent, file] of Object.entries(LINKS))
     if (agents.includes(agent)) out.push([agent, isOurLink(file) || `${tilde(file)} não aponta para as regras gerais`]);
-  for (const h of agents.includes('hermes') ? hermesProfiles() : []) {
-    const soul = path.join(h.home, 'SOUL.md');
+  const workspaces = agents.includes('openclaw') ? openclawWorkspaces().map((home) => ({ home, label: 'openclaw', file: 'AGENTS.md' })) : [];
+  for (const h of [...(agents.includes('hermes') ? hermesProfiles() : []), ...workspaces]) {
+    const soul = path.join(h.home, h.file || 'SOUL.md');
     const s = fs.existsSync(soul) ? fs.readFileSync(soul, 'utf8') : '';
     const b = soulBlock(s);
-    out.push([h.label, (b && s.slice(b.start, b.end) === `${BEGIN}\n${text}${END}`) || 'SOUL.md sem as regras gerais atuais']);
+    out.push([h.label, (b && s.slice(b.start, b.end) === `${BEGIN}\n${text}${END}`) || `${h.file || 'SOUL.md'} sem as regras gerais atuais`]);
   }
   if (agents.includes('cursor')) {
     const hooks = readJSON(CURSOR_HOOKS, {}).hooks?.sessionStart || [];

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Instala o ai-memory (versão fixada no sources.json), sobe o serviço local e liga os agentes.
 //
-//   node ai-memory/setup.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex]
+//   node ai-memory/setup.mjs [--dry-run] [--yes] [--agents claude,cursor,hermes,openclaude,codex,openclaw]
 //                            [--llm none|anthropic|anthropic-oauth] [--model claude-haiku-4-5]
 //   node ai-memory/setup.mjs --uninstall [--dry-run]   (tira a ligação dos agentes e para o serviço; os dados ficam)
 //
@@ -41,6 +41,8 @@ import {
   which,
   writeJSON,
 } from '../scripts/lib.mjs';
+
+import { allowOpenclawCapture, openclawConfig, openclawHooksWired, wireOpenclawMcp } from '../scripts/openclaw.mjs';
 
 const BASE_URL = 'http://127.0.0.1:49374';
 export const MCP_URL = `${BASE_URL}/mcp`;
@@ -481,9 +483,20 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     }
   }
 
+  if (agents.includes('openclaw')) {
+    wireOpenclawMcp('ai-memory', { url: MCP_URL, transport: 'streamable-http' }, { dryRun });
+    if (!binaryChanged && openclawHooksWired())
+      log.ok('openclaw: plugin de captura do ai-memory já instalado');
+    else if (dryRun || (await confirm('openclaw: instalar o plugin ai-memory e permitir acesso ao conteúdo das conversas para captura na memória local?'))) {
+      if (ai(['install-hooks', '--agent', 'openclaw', '--apply']) !== 0) throw new Error('Falha ao instalar o plugin de captura do OpenClaw');
+      allowOpenclawCapture({ dryRun });
+      log.info('openclaw: recarregue o plugin no gateway aberto com openclaw plugins reload ai-memory.');
+    }
+  }
+
   // Skills gerenciadas do ai-memory (ai-memory-*): pastas reais, que o link.mjs não toca.
   const claude = agents.includes('claude');
-  const agentsDir = agents.includes('cursor') || agents.includes('hermes') || agents.includes('codex');
+  const agentsDir = agents.includes('cursor') || agents.includes('hermes') || agents.includes('codex') || agents.includes('openclaw');
   const family = claude && agentsDir ? 'both' : claude ? 'claude-code' : agentsDir ? 'agents' : null;
   const targets = [family && `--agent ${family}`, agents.includes('openclaude') && '~/.openclaude/skills'].filter(Boolean);
   const dirs = [
@@ -556,6 +569,11 @@ async function isolateProjects({ dryRun }) {
 
 async function uninstall(agents, { dryRun }) {
   log.step('Desligar o ai-memory');
+  if (agents.includes('openclaw')) {
+    wireOpenclawMcp('ai-memory', null, { dryRun, remove: true });
+    const cli = which('openclaw');
+    if (cli && openclawConfig().plugins?.entries?.['ai-memory']?.enabled) runQuiet(cli, ['plugins', 'disable', 'ai-memory'], { dryRun });
+  }
   if (fs.existsSync(BIN)) runLive(BIN, dryRun ? ['uninstall'] : ['uninstall', '--apply', '--yes']);
   else log.warn(`binário não encontrado em ${tilde(BIN)}`);
   for (const h of agents.includes('hermes') ? hermesProfiles() : []) {

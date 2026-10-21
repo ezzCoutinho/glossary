@@ -1,6 +1,6 @@
 # glossary
 
-Skills e memória compartilhadas por **Claude Code, Cursor, Hermes, OpenClaude e Codex**, montadas de uma vez só.
+Skills e memória compartilhadas por **Claude Code, Cursor, Hermes, OpenClaude, Codex e OpenClaw**, montadas de uma vez só.
 
 - **Skills**: as próprias (`skills/`) e as de terceiros (`vendor/`, cópia fiel com lockfile) numa pasta só, ligadas por symlink onde cada agente lê. Atualizar é `git pull`.
 - **Memória**: o [ai-memory](https://github.com/akitaonrails/ai-memory) captura as sessões de todos os agentes num servidor local. Dá para largar uma tarefa num agente e continuar em outro.
@@ -28,6 +28,9 @@ O instalador confere os pré-requisitos (git e Node 20+), faz as poucas pergunta
 | Hermes (todos os perfis) | `~/.agents/skills` via `skills.external_dirs` | MCP + hooks de ferramenta | MCP, contexto `ide` |
 | OpenClaude | `~/.openclaude/skills` | MCP + hooks (se for confiável) | MCP, contexto `claude-code` |
 | Codex | `~/.agents/skills` (mesma pasta do Cursor e do Hermes) | MCP + hooks (se for confiável) | MCP, contexto `codex` |
+| OpenClaw | `~/.agents/skills` (mesma pasta do Cursor, Hermes e Codex) | MCP + plugin nativo de captura | MCP, contexto `ide` |
+
+O OpenClaw recebe as regras gerais em um bloco gerenciado no `AGENTS.md` de cada workspace, preservando o conteúdo existente. O glossary registra os servidores em `mcp.servers` pelo CLI nativo. Confira com `openclaw mcp probe ai-memory` e `openclaw mcp probe serena`.
 
 ## Estrutura
 
