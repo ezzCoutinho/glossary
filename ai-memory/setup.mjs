@@ -491,7 +491,17 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     if (!binaryChanged && openclawHooksWired())
       log.ok('openclaw: plugin de captura do ai-memory já instalado');
     else if (dryRun || (await confirm('openclaw: instalar o plugin ai-memory e permitir acesso ao conteúdo das conversas para captura na memória local?'))) {
-      if (ai(['install-hooks', '--agent', 'openclaw', '--apply']) !== 0) throw new Error('Falha ao instalar o plugin de captura do OpenClaw');
+      // shortcut: o ai-memory v3.1.1 não passa --accept-capabilities, que o OpenClaw 2026.9+ exige; refazemos o install
+      // e o enable com a flag sobre o pacote que ele já gerou. Tirar quando o ai-memory passar a flag.
+      const plugin = path.join(paths.data, 'openclaw-plugin');
+      const cli = which('openclaw');
+      const installed =
+        ai(['install-hooks', '--agent', 'openclaw', '--apply']) === 0 ||
+        (cli &&
+          fs.existsSync(path.join(plugin, 'openclaw.plugin.json')) &&
+          runQuiet(cli, ['plugins', 'install', '--link', plugin, '--force', '--accept-capabilities'], { dryRun }) === 0 &&
+          runQuiet(cli, ['plugins', 'enable', 'ai-memory'], { dryRun }) === 0);
+      if (!installed) throw new Error('Falha ao instalar o plugin de captura do OpenClaw');
       allowOpenclawCapture({ dryRun });
       log.info('openclaw: recarregue o plugin no gateway aberto com openclaw plugins reload ai-memory.');
     }
