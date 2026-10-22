@@ -28,6 +28,7 @@ import {
   isMain,
   localProjects,
   log,
+  nodeCommand,
   readJSON,
   replaceHermesHooks,
   resolveAgents,
@@ -356,15 +357,17 @@ export const codexHooksTrusted = () => hasText(AGENT_FILES.codex[0], 'trusted_ha
 export const hermesHooksWired = (h) =>
   ['pre_tool_call', 'post_tool_call'].every((e) => hermesHooks(h, e).some((x) => isAiMemoryHook(String(x?.command || ''))));
 
-// Os hooks que o ai-memory imprime para o Hermes, por evento: { pre_tool_call: [{ command, timeout }] }.
+// Os hooks que o ai-memory imprime para o Hermes, por evento: { pre_tool_call: [{ command, timeout }] },
+// cada um atrás do hermes-filter.mjs, que descarta os eventos sem session_id.
 function aiMemoryHermesHooks() {
+  const filter = nodeCommand(path.join(REPO, 'ai-memory', 'hermes-filter.mjs'));
   const out = run(BIN, ['install-hooks', '--agent', 'hermes']).stdout;
   const hooks = {};
   let event = null;
   for (const line of out.slice(Math.max(0, out.search(/^hooks:/m))).split('\n')) {
     let m;
     if ((m = /^ {2}(\w+):\s*$/.exec(line))) hooks[(event = m[1])] = [];
-    else if (event && (m = /^ {4}- command:\s*'(.*)'\s*$/.exec(line))) hooks[event].push({ command: m[1].replace(/''/g, "'") });
+    else if (event && (m = /^ {4}- command:\s*'(.*)'\s*$/.exec(line))) hooks[event].push({ command: `${filter} ${m[1].replace(/''/g, "'")}` });
     else if (event && hooks[event].length && (m = /^ {6}timeout:\s*(\d+)/.exec(line))) hooks[event].at(-1).timeout = Number(m[1]);
   }
   return hooks;
