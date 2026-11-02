@@ -3,8 +3,8 @@
     "ponytail": {
       "repo": "https://github.com/dietrichgebert/ponytail.git",
       "ref": "main",
-      "commit": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
-      "committed": "2026-10-18",
+      "commit": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846",
+      "committed": "2026-10-29",
       "skills": {
         "ponytail": {
           "path": "skills/ponytail",
@@ -41,8 +41,8 @@
     "mattpocock": {
       "repo": "https://github.com/mattpocock/skills.git",
       "ref": "main",
-      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
-      "committed": "2026-10-19",
+      "commit": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+      "committed": "2026-10-31",
       "skills": {
         "ask-matt": {
           "path": "skills/engineering/ask-matt",
@@ -62,11 +62,11 @@
         },
         "improve-codebase-architecture": {
           "path": "skills/engineering/improve-codebase-architecture",
-          "sha256": "21e81aed6d25a2b16ad0e6b9ec65b398145a110d11fd76951263d13372822e9d"
+          "sha256": "8d02654da91dea62336b390b4c77031629840aec40d604aa6aa08e78df98d7ea"
         },
         "setup-matt-pocock-skills": {
           "path": "skills/engineering/setup-matt-pocock-skills",
-          "sha256": "bff19f6675e970b6f2d4245f892992b86c2366a1b0d6b448c667e04b9f403e4b"
+          "sha256": "d1d1b40f71fcb294d27a1b00297d1d25bcff3bc1e8759794a4af906b243d8e31"
         },
         "tdd": {
           "path": "skills/engineering/tdd",
@@ -82,7 +82,7 @@
         },
         "wayfinder": {
           "path": "skills/engineering/wayfinder",
-          "sha256": "4f71c4310d6ffaaa7db7df1ec416be6cdb5c06fc3a58751f4310901f9aacf945"
+          "sha256": "62a0ab7262d40119da048328a71aeadaeaa21a4049ee9268d14500921bb6e257"
         },
         "implement": {
           "path": "skills/engineering/implement",
@@ -90,7 +90,7 @@
         },
         "implement-spec": {
           "path": "skills/engineering/implement-spec",
-          "sha256": "3e613d4c4ad1c95dc3489fa447a420875dd2b6b6750eace3dcbc4d218a7d6623"
+          "sha256": "c50119e1da19b7e62161d96e00bc1e39e661ac48e522ce4904c362bccc90e72e"
         },
         "prototype": {
           "path": "skills/engineering/prototype",
@@ -98,7 +98,7 @@
         },
         "research": {
           "path": "skills/engineering/research",
-          "sha256": "b1976e3b4a7cdcee2f7ade52c0cf072bafdbac9cf3284568cab1aa258e584e69"
+          "sha256": "f2d6425b15cf3100d5c3eb4305a8e817174b8e5fa1fde6e06ad4b61321c32a60"
         },
         "domain-modeling": {
           "path": "skills/engineering/domain-modeling",
@@ -106,11 +106,11 @@
         },
         "codebase-design": {
           "path": "skills/engineering/codebase-design",
-          "sha256": "e91e18258598832efe27af7e3c423ab262c6f8b8ecb6262d8fbb80d626ef0e19"
+          "sha256": "61f4936a45f334e894fe4c7e9b1bbaf509c1b451c2f8bddf91e563ac6ae82422"
         },
         "code-review": {
           "path": "skills/engineering/code-review",
-          "sha256": "780be2eef8e387f5d0c07473485cdce4dd2e55c0587f1e96635eb7e929ed1123"
+          "sha256": "cd5bdf2afe1680d10150ae58abacbc32e7a11d034be76c7ef6fad58546ce85e3"
         },
         "pr": {
           "path": "skills/engineering/pr",
@@ -130,7 +130,7 @@
         },
         "grilling": {
           "path": "skills/productivity/grilling",
-          "sha256": "84ca0320c5fa81a1261d6d1d4c120ada9dea80f856a2c2565404f7125a809b86"
+          "sha256": "27f71f106a7062691b2982d4f847304a62930ebed8b50734f4d4fd498d60afa8"
         },
         "handoff": {
           "path": "skills/productivity/handoff",
@@ -157,8 +157,8 @@
     "awesome-copilot": {
       "repo": "https://github.com/github/awesome-copilot.git",
       "ref": "main",
-      "commit": "b1a00457c0b8794243883f387e7de71e88800e3e",
-      "committed": "2026-10-26",
+      "commit": "61fa1fa8fcc63d6dbd2f07a75aeb8e214df5acfb",
+      "committed": "2026-11-02",
       "skills": {
         "salesforce-apex-quality": {
           "path": "skills/salesforce-apex-quality",
@@ -176,12 +176,12 @@
     }
   },
   "aiMemory": {
-    "version": "v3.2.5",
+    "version": "v3.3.1",
     "assets": {
-      "macos-aarch64": "4cf5294333978dfc581cfaf925db5ccf946b2894819d826262775cff4e37a306",
-      "macos-x86_64": "c4749a3ae35b66147ce4080f3101c5330d08b64fafb8bf2b0fbe186f1bc78850",
-      "linux-x86_64": "cea3e9e514b763b60372d6c9fbcc665c42cd3de2bd0a097dbe080be32a69960e",
-      "linux-aarch64": "3f0d2900b2addd15fb6519700a32f20ed9bb26a1392b359ade035c5e479ed08c"
+      "macos-aarch64": "0289d5b6ed3d371216bf086addc65e5f1beedff76cf6e640ad9fe4ddba70a18a",
+      "macos-x86_64": "991d6b1053bfe742f1a4e2de46627522b8a5bb4d4b48f50dfad73b122464e1ae",
+      "linux-x86_64": "2045a115745a949d89cfc6a709da110a29b98fd6f2b63a928442ce949550fad4",
+      "linux-aarch64": "6a3ba000bd675a45f42236b68ea7c9e5818562a68379cee407ae26650b77cd57"
     }
   },
   "serena": {
