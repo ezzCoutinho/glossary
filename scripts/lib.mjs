@@ -260,7 +260,7 @@ export function which(cmd) {
   return null;
 }
 
-// Binário do Claude Code: primeiro o PATH, depois a extensão do VS Code (a versão mais nova).
+// Binário do Claude Code: primeiro o PATH, depois a extensão do VS Code e o app desktop (a versão mais nova).
 export function findClaudeBinary() {
   const inPath = which('claude');
   if (inPath) return inPath;
@@ -277,10 +277,10 @@ export function findClaudeBinary() {
   // App desktop do Claude no macOS: claude-code/<versão>/<hash>/claude.app/Contents/MacOS/claude.
   const desktop = path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude-code');
   if (fs.existsSync(desktop))
-    for (const version of fs.readdirSync(desktop).filter((v) => fs.statSync(path.join(desktop, v)).isDirectory()))
-      for (const hash of fs.readdirSync(path.join(desktop, version), { withFileTypes: true }).filter((d) => d.isDirectory())) {
-        const bin = path.join(desktop, version, hash.name, 'claude.app', 'Contents', 'MacOS', 'claude');
-        if (fs.existsSync(bin)) found.push({ bin, version });
+    for (const version of fs.readdirSync(desktop, { withFileTypes: true }).filter((d) => d.isDirectory()))
+      for (const hash of fs.readdirSync(path.join(desktop, version.name), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+        const bin = path.join(desktop, version.name, hash.name, 'claude.app', 'Contents', 'MacOS', 'claude');
+        if (fs.existsSync(bin)) found.push({ bin, version: version.name });
       }
   found.sort((a, b) => compareVersions(b.version, a.version));
   return found[0]?.bin || null;
