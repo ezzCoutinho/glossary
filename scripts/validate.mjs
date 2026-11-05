@@ -30,7 +30,7 @@ const EXTRA_FIELDS = ['disable-model-invocation', 'argument-hint'];
 const ALLOWED = new Set([...SPEC_FIELDS, ...EXTRA_FIELDS]);
 // Campos que o Hermes põe nas skills que ele cria e edita (só nas raízes privadas, onde ele grava).
 // Os outros agentes ignoram campos que não conhecem.
-const HERMES_FIELDS = ['version', 'platforms'];
+const HERMES_FIELDS = ['version', 'author', 'platforms'];
 const MAX_LINES = 500;
 
 export function checkSkill(skill, { hermes = false } = {}) {
