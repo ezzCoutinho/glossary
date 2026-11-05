@@ -274,6 +274,14 @@ export function findClaudeBinary() {
       if (fs.existsSync(bin)) found.push({ bin, version: name.slice('anthropic.claude-code-'.length) });
     }
   }
+  // App desktop do Claude no macOS: claude-code/<versão>/<hash>/claude.app/Contents/MacOS/claude.
+  const desktop = path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude-code');
+  if (fs.existsSync(desktop))
+    for (const version of fs.readdirSync(desktop).filter((v) => fs.statSync(path.join(desktop, v)).isDirectory()))
+      for (const hash of fs.readdirSync(path.join(desktop, version), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+        const bin = path.join(desktop, version, hash.name, 'claude.app', 'Contents', 'MacOS', 'claude');
+        if (fs.existsSync(bin)) found.push({ bin, version });
+      }
   found.sort((a, b) => compareVersions(b.version, a.version));
   return found[0]?.bin || null;
 }
