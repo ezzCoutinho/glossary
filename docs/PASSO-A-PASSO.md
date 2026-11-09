@@ -12,7 +12,7 @@ Você ganha três coisas:
 
 - `git` e Node.js 20 ou mais novo. No macOS: `xcode-select --install` e `brew install node`.
 - Pelo menos um dos cinco agentes instalado.
-- Para o Serena: `brew install uv`. Sem ele, o resto funciona normalmente.
+- Para o Serena: o `uv`. Se faltar, o instalador instala junto com o Serena.
 
 ## Instalar
 
@@ -31,7 +31,7 @@ As perguntas vêm todas no começo. Depois disso a instalação roda sozinha, em
 | **Nomes da empresa para bloquear** | Enter aceita o nome do workspace. Acrescente outros separados por vírgula (ex.: nome de cliente). A trava de commit não deixa esses nomes entrarem no repositório público. Só aparece na primeira vez. |
 | **Dar ao Codex a memória e as skills privadas?** | Enter (não), a menos que ele use conta confiável (API, Team ou Enterprise, sem treino com seus dados). O Codex lê a mesma pasta de skills do Cursor e do Hermes: com "não", as skills privadas saem dessa pasta e o Hermes também deixa de vê-las. |
 | **Dar ao OpenClaude a memória e as skills privadas?** | Enter (não). Só responda `s` se ele usar apenas provedores confiáveis. Com `s`, as sessões dele também passam a ser gravadas. |
-| **Instalar o Serena?** | Enter (sim). Só aparece se você tiver o `uv`. |
+| **Instalar o Serena?** | Enter (sim). Se faltar o `uv`, ele é instalado antes. |
 | **Levar tudo isso para a memória compartilhada?** | Enter (sim). Aparece uma vez por computador, com a lista de pastas onde você já usou o Claude Code. As conversas e as memórias dele vão para a memória que todos os agentes leem. Adicione antes os projetos da empresa (primeira pergunta), senão eles entram na memória pessoal. Nada é duplicado. |
 | **Pode começar?** | Enter. |
 
