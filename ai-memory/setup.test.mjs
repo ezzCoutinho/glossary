@@ -41,6 +41,9 @@ test('MCP e ponte usam a porta configurada, mantendo o padrão sem config', asyn
       // O Cursor grava o hooks.json com a barra escapada.
       fs.writeFileSync(hooks, JSON.stringify({ command: `ai-memory hook --server-url ${url}` }).replaceAll('/', '\\/'));
       assert.equal(setup.wired('cursor', [mcp, hooks]), expected, `cursor (barra escapada) na porta ${port}`);
+      // Instalação com token: o ai-memory grava a ponte stdio, sem o campo url.
+      fs.writeFileSync(mcp, JSON.stringify({ mcpServers: { 'ai-memory': { type: 'stdio', command: 'ai-memory', args: ['mcp-bridge', '--server-url', `${url}/mcp`] } } }));
+      assert.equal(setup.wired('cursor', [mcp, hooks]), expected, `cursor (ponte stdio) na porta ${port}`);
     }
   } finally {
     os.homedir = homedir;

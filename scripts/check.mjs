@@ -236,6 +236,7 @@ export async function check({ agents } = {}) {
 // true se o registro do Serena no agente está como o glossary grava; texto com o problema; null se não deu para conferir.
 function serenaRegistration(agent, h) {
   if (agent === 'openclaw') {
+    if (!which('openclaw')) return null;
     const entry = openclawConfig().mcp?.servers?.serena;
     return (entry?.enabled !== false && entry?.command && argsOk((entry.args || []).join(' '), agent)) || 'MCP do Serena ausente, desligado ou com outros argumentos';
   }

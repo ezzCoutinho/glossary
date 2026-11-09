@@ -376,7 +376,11 @@ export function wired(agent, files) {
     const lines = fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8').split('\n') : [];
     const { start, end } = codexAiMemoryTable(lines);
     mcp = start >= 0 && lines.slice(start, end).join('\n').includes(MCP_URL);
-  } else mcp = readJSON(mcpFile, {}).mcpServers?.['ai-memory']?.url === MCP_URL;
+  } else {
+    // Pela URL ({ url }) ou, numa instalação com token, pela ponte stdio ({ command, args: [..., MCP_URL] }).
+    const entry = readJSON(mcpFile, {}).mcpServers?.['ai-memory'];
+    mcp = entry?.url === MCP_URL || Boolean(entry?.args?.includes(MCP_URL));
+  }
   return mcp && hooksAtUrl(hooksFile);
 }
 
