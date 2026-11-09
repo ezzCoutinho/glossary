@@ -68,6 +68,8 @@ const BASE_URL = (setting('server_url') || `http://${setting('bind') || '127.0.0
 export const MCP_URL = `${BASE_URL}/mcp`;
 // Como o install-hooks grava o endereço em cada hook. Hook com outra porta conta como não ligado.
 export const HOOKS_URL = `--server-url ${BASE_URL}`;
+// O JSON pode trazer a barra escapada ("http:\/\/"), como o hooks.json do Cursor no ai-memory 3.4.
+export const hooksAtUrl = (file) => fs.existsSync(file) && fs.readFileSync(file, 'utf8').replaceAll('\\/', '/').includes(HOOKS_URL);
 export const BIN = path.join(paths.install, 'ai-memory');
 // Arquivos de config que o ai-memory grava em cada agente com hooks: [MCP, hooks].
 export const AGENT_FILES = {
@@ -369,14 +371,13 @@ async function waitHealthy(seconds = 30) {
 // trocada no config.toml, o registro antigo não conta e o ./install.sh grava de novo.
 export function wired(agent, files) {
   const [mcpFile, hooksFile] = files;
-  const hooks = fs.existsSync(hooksFile) ? fs.readFileSync(hooksFile, 'utf8') : '';
   let mcp;
   if (agent === 'codex') {
     const lines = fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8').split('\n') : [];
     const { start, end } = codexAiMemoryTable(lines);
     mcp = start >= 0 && lines.slice(start, end).join('\n').includes(MCP_URL);
   } else mcp = readJSON(mcpFile, {}).mcpServers?.['ai-memory']?.url === MCP_URL;
-  return mcp && hooks.includes(HOOKS_URL);
+  return mcp && hooksAtUrl(hooksFile);
 }
 
 // O Codex pede para revisar cada hook novo e guarda a aprovação (trusted_hash) no config.toml.
@@ -557,7 +558,7 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
         runQuiet(oc, ['mcp', 'add', '--scope', 'user', 'ai-memory', '--', BIN, ...BRIDGE_ARGS], { dryRun });
       }
       // Os hooks do Claude Code, gravados com CLAUDE_CONFIG_DIR apontando para a pasta do OpenClaude.
-      if (!binaryChanged && hasText(OPENCLAUDE_SETTINGS, HOOKS_URL)) log.ok('openclaude: hooks do ai-memory já ligados');
+      if (!binaryChanged && hooksAtUrl(OPENCLAUDE_SETTINGS)) log.ok('openclaude: hooks do ai-memory já ligados');
       else if (dryRun || (await confirm(`openclaude: gravar os hooks do ai-memory em ${tilde(OPENCLAUDE_SETTINGS)}?`))) {
         backupFile(OPENCLAUDE_SETTINGS, { dryRun });
         runQuiet(BIN, ['install-hooks', '--agent', 'claude-code', '--apply'], {

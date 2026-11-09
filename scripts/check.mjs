@@ -13,7 +13,6 @@ import {
   AGENT_FILES,
   BIN,
   BRIDGE_ARGS,
-  HOOKS_URL,
   MCP_URL,
   OPENCLAUDE_SETTINGS,
   codexBridged,
@@ -22,6 +21,7 @@ import {
   hermesAllowlist,
   hermesHooksWired,
   hermesMcpEntry,
+  hooksAtUrl,
   mcpStatus,
   mcpToken,
   wired,
@@ -166,7 +166,7 @@ export async function check({ agents } = {}) {
     const got = oc && run(oc, ['mcp', 'get', 'ai-memory']);
     const registered = got && got.code === 0;
     const hooks = hasText(OPENCLAUDE_SETTINGS, 'ai-memory');
-    const hooksHere = hasText(OPENCLAUDE_SETTINGS, HOOKS_URL);
+    const hooksHere = hooksAtUrl(OPENCLAUDE_SETTINGS);
     if (memoryAgents.includes('openclaude')) {
       if (!registered) bad('openclaude: MCP do ai-memory não registrado');
       else if (!got.stdout.includes('mcp-bridge')) viaUrl('openclaude');

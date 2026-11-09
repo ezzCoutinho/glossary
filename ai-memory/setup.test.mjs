@@ -38,6 +38,9 @@ test('MCP e ponte usam a porta configurada, mantendo o padrão sem config', asyn
       fs.writeFileSync(hooks, `ai-memory hook --event stop --agent claude-code --server-url ${url}`);
       assert.equal(setup.wired('claude', [mcp, hooks]), expected, `claude na porta ${port}`);
       assert.equal(setup.wired('codex', [toml, hooks]), expected, `codex na porta ${port}`);
+      // O Cursor grava o hooks.json com a barra escapada.
+      fs.writeFileSync(hooks, JSON.stringify({ command: `ai-memory hook --server-url ${url}` }).replaceAll('/', '\\/'));
+      assert.equal(setup.wired('cursor', [mcp, hooks]), expected, `cursor (barra escapada) na porta ${port}`);
     }
   } finally {
     os.homedir = homedir;
