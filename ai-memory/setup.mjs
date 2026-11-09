@@ -66,6 +66,8 @@ const config = fs.existsSync(configFile) ? fs.readFileSync(configFile, 'utf8').s
 const setting = (key) => new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, 'm').exec(config)?.[1];
 const BASE_URL = (setting('server_url') || `http://${setting('bind') || '127.0.0.1:49374'}`).replace(/\/$/, '');
 export const MCP_URL = `${BASE_URL}/mcp`;
+// Como o install-hooks grava o endereço em cada hook. Hook com outra porta conta como não ligado.
+export const HOOKS_URL = `--server-url ${BASE_URL}`;
 export const BIN = path.join(paths.install, 'ai-memory');
 // Arquivos de config que o ai-memory grava em cada agente com hooks: [MCP, hooks].
 export const AGENT_FILES = {
@@ -363,15 +365,18 @@ async function waitHealthy(seconds = 30) {
 
 // ---------- 4. agentes ----------
 
-// MCP registrado e algum hook chamando o ai-memory: o agente já está ligado.
+// MCP e hooks do ai-memory gravados com o endereço atual: o agente já está ligado. Com a porta
+// trocada no config.toml, o registro antigo não conta e o ./install.sh grava de novo.
 export function wired(agent, files) {
   const [mcpFile, hooksFile] = files;
   const hooks = fs.existsSync(hooksFile) ? fs.readFileSync(hooksFile, 'utf8') : '';
-  const mcp =
-    agent === 'codex'
-      ? /^\[mcp_servers\.(ai-memory|"ai-memory")\]/m.test(fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8') : '')
-      : Boolean(readJSON(mcpFile, {}).mcpServers?.['ai-memory']);
-  return mcp && hooks.includes('ai-memory');
+  let mcp;
+  if (agent === 'codex') {
+    const lines = fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8').split('\n') : [];
+    const { start, end } = codexAiMemoryTable(lines);
+    mcp = start >= 0 && lines.slice(start, end).join('\n').includes(MCP_URL);
+  } else mcp = readJSON(mcpFile, {}).mcpServers?.['ai-memory']?.url === MCP_URL;
+  return mcp && hooks.includes(HOOKS_URL);
 }
 
 // O Codex pede para revisar cada hook novo e guarda a aprovação (trusted_hash) no config.toml.
@@ -521,10 +526,10 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     if (!profiles.length) log.warn('hermes não está no PATH; pulei');
     for (const h of profiles) {
       const entry = hermesMcpEntry(h);
-      if (entry?.command === BIN) log.ok(`${h.label}: ai-memory já registrado`);
+      if (entry?.command === BIN && entry.args?.join(' ') === BRIDGE_ARGS.join(' ')) log.ok(`${h.label}: ai-memory já registrado`);
       else if (
         dryRun ||
-        (await confirm(entry ? `${h.label}: trocar o registro do ai-memory pela ponte mcp-bridge?` : `${h.label}: registrar o MCP do ai-memory (hermes mcp add)?`))
+        (await confirm(entry ? `${h.label}: trocar o registro do ai-memory pela ponte mcp-bridge em ${MCP_URL}?` : `${h.label}: registrar o MCP do ai-memory (hermes mcp add)?`))
       ) {
         backupFile(run(h.bin, [...h.args, 'config', 'path']).stdout.trim(), { dryRun });
         if (entry) runWithAnswers(h.bin, [...h.args, 'mcp', 'remove', 'ai-memory'], 'y\n', { dryRun });
@@ -542,17 +547,17 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     if (!oc) log.warn('openclaude não está no PATH; pulei');
     else {
       const got = run(oc, ['mcp', 'get', 'ai-memory']);
-      if (got.code === 0 && got.stdout.includes('mcp-bridge')) log.ok('openclaude: ai-memory já registrado');
+      if (got.code === 0 && got.stdout.includes('mcp-bridge') && got.stdout.includes(MCP_URL)) log.ok('openclaude: ai-memory já registrado');
       else if (
         dryRun ||
-        (await confirm(got.code === 0 ? 'openclaude: trocar o registro do ai-memory pela ponte mcp-bridge?' : 'openclaude: registrar o MCP do ai-memory no escopo de usuário?'))
+        (await confirm(got.code === 0 ? `openclaude: trocar o registro do ai-memory pela ponte mcp-bridge em ${MCP_URL}?` : 'openclaude: registrar o MCP do ai-memory no escopo de usuário?'))
       ) {
         backupFile(path.join(HOME, '.openclaude.json'), { dryRun });
         if (got.code === 0) runQuiet(oc, ['mcp', 'remove', '--scope', 'user', 'ai-memory'], { dryRun });
         runQuiet(oc, ['mcp', 'add', '--scope', 'user', 'ai-memory', '--', BIN, ...BRIDGE_ARGS], { dryRun });
       }
       // Os hooks do Claude Code, gravados com CLAUDE_CONFIG_DIR apontando para a pasta do OpenClaude.
-      if (!binaryChanged && hasText(OPENCLAUDE_SETTINGS, 'ai-memory')) log.ok('openclaude: hooks do ai-memory já ligados');
+      if (!binaryChanged && hasText(OPENCLAUDE_SETTINGS, HOOKS_URL)) log.ok('openclaude: hooks do ai-memory já ligados');
       else if (dryRun || (await confirm(`openclaude: gravar os hooks do ai-memory em ${tilde(OPENCLAUDE_SETTINGS)}?`))) {
         backupFile(OPENCLAUDE_SETTINGS, { dryRun });
         runQuiet(BIN, ['install-hooks', '--agent', 'claude-code', '--apply'], {

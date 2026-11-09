@@ -7,6 +7,9 @@ import test from 'node:test';
 test('MCP e ponte usam a porta configurada, mantendo o padrão sem config', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glossary-memory-'));
   const homedir = os.homedir;
+  // No Linux, XDG_DATA_HOME passaria na frente do home e tiraria os dados da pasta temporária.
+  const xdg = process.env.XDG_DATA_HOME;
+  delete process.env.XDG_DATA_HOME;
   os.homedir = () => dir;
   try {
     const first = await import('./setup.mjs?default');
@@ -24,8 +27,21 @@ test('MCP e ponte usam a porta configurada, mantendo o padrão sem config', asyn
       assert.equal(setup.MCP_URL, url);
       assert.equal(setup.BRIDGE_ARGS.at(-1), url);
     }
+
+    // Agente gravado com a porta antiga não conta como ligado, para o ./install.sh gravar de novo.
+    const setup = await import('./setup.mjs?case=0');
+    const [mcp, hooks, toml] = ['mcp.json', 'hooks.json', 'codex.toml'].map((f) => path.join(dir, f));
+    for (const [port, expected] of [[49374, false], [49375, true]]) {
+      const url = `http://127.0.0.1:${port}`;
+      fs.writeFileSync(mcp, JSON.stringify({ mcpServers: { 'ai-memory': { url: `${url}/mcp` } } }));
+      fs.writeFileSync(toml, `[mcp_servers.ai-memory]\nargs = ["mcp-bridge","--server-url","${url}/mcp"]\n`);
+      fs.writeFileSync(hooks, `ai-memory hook --event stop --agent claude-code --server-url ${url}`);
+      assert.equal(setup.wired('claude', [mcp, hooks]), expected, `claude na porta ${port}`);
+      assert.equal(setup.wired('codex', [toml, hooks]), expected, `codex na porta ${port}`);
+    }
   } finally {
     os.homedir = homedir;
+    if (xdg !== undefined) process.env.XDG_DATA_HOME = xdg;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
