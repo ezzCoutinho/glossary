@@ -45,8 +45,6 @@ import {
 
 import { allowOpenclawCapture, openclawConfig, openclawHooksWired, wireOpenclawMcp } from '../scripts/openclaw.mjs';
 
-const BASE_URL = 'http://127.0.0.1:49374';
-export const MCP_URL = `${BASE_URL}/mcp`;
 const LABEL = 'com.github.akitaonrails.ai-memory';
 const MAC = process.platform === 'darwin';
 const LLM_KEYS = ['AI_MEMORY_LLM_PROVIDER', 'AI_MEMORY_LLM_MODEL', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
@@ -62,6 +60,12 @@ export const paths = {
   unit: path.join(HOME, '.config', 'systemd', 'user', 'ai-memory.service'),
   envFile: path.join(HOME, '.config', 'ai-memory', 'env'),
 };
+// Usa a mesma porta do servidor quando a padrão estiver ocupada por outro programa.
+const configFile = path.join(paths.data, 'config.toml');
+const config = fs.existsSync(configFile) ? fs.readFileSync(configFile, 'utf8').split(/^\s*\[/m)[0] : '';
+const setting = (key) => new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, 'm').exec(config)?.[1];
+const BASE_URL = (setting('server_url') || `http://${setting('bind') || '127.0.0.1:49374'}`).replace(/\/$/, '');
+export const MCP_URL = `${BASE_URL}/mcp`;
 export const BIN = path.join(paths.install, 'ai-memory');
 // Arquivos de config que o ai-memory grava em cada agente com hooks: [MCP, hooks].
 export const AGENT_FILES = {
