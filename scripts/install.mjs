@@ -21,6 +21,7 @@ import { link } from './link.mjs';
 import { DENY_FILE, exportPrivate, importPrivate, setupPrivateRepo, writeDenyTerms } from './private.mjs';
 import {
   CONFIG_DIR,
+  HOME,
   REPO,
   ask,
   die,
@@ -121,11 +122,12 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
     if (!on) memoryAgents = memoryAgents.filter((a) => a !== 'codex');
   }
 
-  const uvOrSerena = which('uv') || findSerena();
-  let serena = false;
-  if (uvOrSerena)
-    serena = await yesNo('Instalar o Serena (o agente busca código por símbolo em vez de ler arquivos inteiros)?', previous?.serena ?? true);
-  else log.info('Serena pulado: falta o uv (brew install uv). Dá para instalar depois com ./install.sh.');
+  const needsUv = !which('uv') && !findSerena();
+  const serena = await yesNo(
+    `Instalar o Serena (o agente busca código por símbolo em vez de ler arquivos inteiros)?${needsUv ? ' Instala o uv antes.' : ''}`,
+    // Sem o uv, rodadas antigas gravavam "não" sem perguntar; isso não conta como escolha.
+    needsUv || (previous?.serena ?? true),
+  );
 
   const company = projects.projects.filter((p) => p.aiMemory).map((p) => path.resolve(expandHome(p.dir)));
   // O que os agentes já guardaram neste computador: oferecido uma vez por computador, e de novo
@@ -183,6 +185,7 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
 
   if (serena) {
     log.step('Serena');
+    if (needsUv) installUv();
     await serenaSetup({ agents, memories: 'off', summary: false });
   }
 
@@ -203,6 +206,16 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
   log.info('3. Para conferir de novo a qualquer momento: node glossary.mjs --check');
   log.info('4. Para atualizar: git pull && ./install.sh --yes');
   return result;
+}
+
+// O Serena é instalado pelo uv; sem ele o instalador pulava o Serena calado.
+function installUv() {
+  const code = which('brew')
+    ? runQuiet('brew', ['install', 'uv'])
+    : runQuiet('sh', ['-c', 'curl -LsSf https://astral.sh/uv/install.sh | sh']);
+  if (code !== 0) die('não deu para instalar o uv; instale com "brew install uv" e rode ./install.sh de novo');
+  // O instalador oficial põe o uv em ~/.local/bin, que pode não estar no PATH deste processo.
+  process.env.PATH = `${path.join(HOME, '.local', 'bin')}${path.delimiter}${process.env.PATH}`;
 }
 
 if (isMain(import.meta.url)) {
