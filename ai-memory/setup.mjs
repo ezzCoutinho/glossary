@@ -365,6 +365,29 @@ async function waitHealthy(seconds = 30) {
   return false;
 }
 
+// Com token (instalação nova do ai-memory 3.4+), o painel /web pede usuário e senha, e o init não cria
+// nenhum. Criamos um usuário root com o nome do login e mostramos a senha temporária uma vez.
+function webLogin({ dryRun }) {
+  if (!mcpToken()) return;
+  const list = run(BIN, ['user', 'list', '--json']);
+  let users = null;
+  try {
+    users = JSON.parse(list.stdout);
+  } catch {}
+  if (!Array.isArray(users)) return log.warn('não consegui listar os usuários do painel; veja "ai-memory user list"');
+  if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado`);
+  const username = os.userInfo().username;
+  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${BASE_URL}/web`);
+  const out = run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']);
+  let password;
+  try {
+    password = JSON.parse(out.stdout).temporary_password;
+  } catch {}
+  if (!password) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
+  log.ok(`painel ${BASE_URL}/web: usuário "${username}", senha temporária ${password}`);
+  log.info('Guarde a senha: ela aparece só agora, e o painel pede uma nova no primeiro login.');
+}
+
 // ---------- 4. agentes ----------
 
 // MCP e hooks do ai-memory gravados com o endereço atual: o agente já está ligado. Com a porta
@@ -499,6 +522,28 @@ function unwireHooksFile(file, label, { dryRun = false } = {}) {
   log.ok(`${label}: hooks do ai-memory removidos`);
 }
 
+// O install-hooks regrava só os hooks que conhece. Hooks do ai-memory que versões antigas gravaram
+// (ex.: subagent-start/stop no hooks.json do Codex) ficavam no endereço anterior depois de trocar a porta.
+export function dropStaleHooks(file, { dryRun = false } = {}) {
+  if (dryRun || !fs.existsSync(file)) return;
+  const settings = readJSON(file, {});
+  const stale = (h) => {
+    const url = /--server-url\s+(\S+)/.exec(String(h.command || ''))?.[1];
+    return url && url.replace(/\/$/, '') !== BASE_URL;
+  };
+  let dropped = 0;
+  for (const [event, groups] of Object.entries(settings.hooks || {})) {
+    const kept = groups
+      .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !(stale(h) && ++dropped)) }))
+      .filter((g) => g.hooks.length);
+    if (kept.length) settings.hooks[event] = kept;
+    else delete settings.hooks[event];
+  }
+  if (!dropped) return;
+  writeJSON(file, settings);
+  log.ok(`${tilde(file)}: ${dropped} hook(s) do ai-memory em outro endereço removido(s)`);
+}
+
 export const unwireOpenclaudeHooks = (opts) => unwireHooksFile(OPENCLAUDE_SETTINGS, 'openclaude', opts);
 
 // Desliga o ai-memory no Codex: MCP (pelo CLI dele) e hooks. A aprovação dos hooks fica no config.toml.
@@ -522,6 +567,7 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     for (const f of files[agent]) backupFile(f, { dryRun });
     ai(['install-mcp', '--client', client, '--apply']);
     ai(['install-hooks', '--agent', client, '--apply']);
+    dropStaleHooks(files[agent][1], { dryRun });
     if (agent === 'codex') bridgeCodex({ dryRun });
     if (agent === 'codex') log.info('Na primeira vez que abrir o Codex, ele pede para revisar os hooks: escolha "Trust all and continue".');
   }
@@ -569,6 +615,7 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
           dryRun,
           env: { CLAUDE_CONFIG_DIR: path.dirname(OPENCLAUDE_SETTINGS) },
         });
+        dropStaleHooks(OPENCLAUDE_SETTINGS, { dryRun });
       }
     }
   }
@@ -715,6 +762,7 @@ export async function setup({ dryRun = false, agents, llm, model, uninstall: off
     log.err(`${MCP_URL} não respondeu; veja ${MAC ? tilde(path.join(paths.logs, 'stderr.log')) : 'journalctl --user -u ai-memory'}`);
     return 1;
   }
+  webLogin({ dryRun });
   await wireAgents(agents, { dryRun, binaryChanged });
   await isolateProjects({ dryRun });
 

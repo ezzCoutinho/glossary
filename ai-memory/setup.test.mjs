@@ -45,6 +45,15 @@ test('MCP e ponte usam a porta configurada, mantendo o padrão sem config', asyn
       fs.writeFileSync(mcp, JSON.stringify({ mcpServers: { 'ai-memory': { type: 'stdio', command: 'ai-memory', args: ['mcp-bridge', '--server-url', `${url}/mcp`] } } }));
       assert.equal(setup.wired('cursor', [mcp, hooks]), expected, `cursor (ponte stdio) na porta ${port}`);
     }
+
+    // Hook do ai-memory que ficou na porta antiga sai; o da porta atual e os de outras ferramentas ficam.
+    const cmd = (port) => ({ type: 'command', command: `ai-memory hook --event x --server-url http://127.0.0.1:${port}` });
+    fs.writeFileSync(hooks, JSON.stringify({ hooks: {
+      SubagentStart: [{ hooks: [cmd(49374)] }],
+      Stop: [{ hooks: [cmd(49375), { type: 'command', command: 'outro-hook' }, cmd(49374)] }],
+    } }));
+    setup.dropStaleHooks(hooks);
+    assert.deepEqual(JSON.parse(fs.readFileSync(hooks, 'utf8')).hooks, { Stop: [{ hooks: [cmd(49375), { type: 'command', command: 'outro-hook' }] }] });
   } finally {
     os.homedir = homedir;
     if (xdg !== undefined) process.env.XDG_DATA_HOME = xdg;
