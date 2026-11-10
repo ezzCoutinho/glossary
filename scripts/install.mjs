@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { discoverHistory, importHistory, showHistory } from '../ai-memory/history.mjs';
-import { readServiceEnv, setup as aiMemorySetup, unwireCodex, unwireOpenclaudeHooks, webCredentials } from '../ai-memory/setup.mjs';
+import { readServiceEnv, setup as aiMemorySetup, unwireCodex, unwireOpenclaudeHooks, webPanel } from '../ai-memory/setup.mjs';
 import { findSerena, setup as serenaSetup } from '../serena/setup.mjs';
 import { INSTALL_FILE, check } from './check.mjs';
 import { link } from './link.mjs';
@@ -213,12 +213,16 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
   log.info('2. Abra uma sessão nova: as skills aparecem pelo nome (ex.: /ponytail-review).');
   log.info('3. Para conferir de novo a qualquer momento: node glossary.mjs --check');
   log.info('4. Para atualizar: git pull && ./install.sh --yes');
-  if (webCredentials) {
-    log.step('Painel da memória (guarde: aparece só agora)');
-    log.info(`Endereço: ${webCredentials.url}`);
-    log.info(`Usuário:  ${webCredentials.username}`);
-    log.info(`Senha:    ${webCredentials.password}${webCredentials.change ? ' (temporária: o painel pede uma nova no primeiro login)' : ''}`);
-    log.info(`Esqueceu? ${webCredentials.reset}`);
+  if (webPanel) {
+    log.step(webPanel.password ? 'Painel da memória (guarde a senha: aparece só agora)' : 'Painel da memória');
+    log.info(`Endereço: ${webPanel.url}`);
+    if (webPanel.open) log.info('Abre direto, sem login.');
+    else {
+      log.info(`Usuário:  ${webPanel.username}`);
+      if (webPanel.password) log.info(`Senha:    ${webPanel.password}${webPanel.change ? ' (temporária: o painel pede uma nova no primeiro login)' : ''}`);
+      else log.info('Senha:    a que apareceu na primeira instalação');
+      log.info(`Esqueceu a senha? ${webPanel.reset}`);
+    }
   }
   return memoryFailed ? 1 : result;
 }
