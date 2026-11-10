@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { discoverHistory, importHistory, showHistory } from '../ai-memory/history.mjs';
-import { readServiceEnv, setup as aiMemorySetup, unwireCodex, unwireOpenclaudeHooks } from '../ai-memory/setup.mjs';
+import { readServiceEnv, setup as aiMemorySetup, unwireCodex, unwireOpenclaudeHooks, webCredentials } from '../ai-memory/setup.mjs';
 import { findSerena, setup as serenaSetup } from '../serena/setup.mjs';
 import { INSTALL_FILE, check } from './check.mjs';
 import { link } from './link.mjs';
@@ -172,7 +172,15 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
 
   log.step('Memória compartilhada');
   const llm = readServiceEnv().AI_MEMORY_LLM_PROVIDER ? undefined : 'none';
-  if ((await aiMemorySetup({ agents: memoryAgents, llm, summary: false })) !== 0) die('a instalação do ai-memory falhou; veja as mensagens acima');
+  // Uma falha na memória não impede o Serena e o resto; a instalação termina com erro no fim.
+  let memoryFailed;
+  try {
+    memoryFailed = (await aiMemorySetup({ agents: memoryAgents, llm, summary: false })) !== 0;
+  } catch (e) {
+    log.err(e.message);
+    memoryFailed = true;
+  }
+  if (memoryFailed) log.err('a instalação do ai-memory falhou; veja as mensagens acima. Sigo com o resto; depois rode ./install.sh de novo');
   // "Não" para o OpenClaude também tira a memória que uma rodada anterior tinha ligado nele.
   const oc = agents.includes('openclaude') && !memoryAgents.includes('openclaude') && which('openclaude');
   if (oc && run(oc, ['mcp', 'get', 'ai-memory']).code === 0) {
@@ -205,7 +213,14 @@ export async function install({ yes = false, agents: agentsFlag, importFile } = 
   log.info('2. Abra uma sessão nova: as skills aparecem pelo nome (ex.: /ponytail-review).');
   log.info('3. Para conferir de novo a qualquer momento: node glossary.mjs --check');
   log.info('4. Para atualizar: git pull && ./install.sh --yes');
-  return result;
+  if (webCredentials) {
+    log.step('Painel da memória (guarde: aparece só agora)');
+    log.info(`Endereço: ${webCredentials.url}`);
+    log.info(`Usuário:  ${webCredentials.username}`);
+    log.info(`Senha:    ${webCredentials.password}${webCredentials.change ? ' (temporária: o painel pede uma nova no primeiro login)' : ''}`);
+    log.info(`Esqueceu? ${webCredentials.reset}`);
+  }
+  return memoryFailed ? 1 : result;
 }
 
 // O Serena é instalado pelo uv; sem ele o instalador pulava o Serena calado.

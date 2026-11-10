@@ -7,6 +7,7 @@
 //
 // Os dados ficam em ~/Library/Application Support/ai-memory (macOS) ou ~/.local/share/ai-memory
 // (Linux) e nunca entram em repositório. Backup: ai-memory backup --to <arquivo>.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -66,6 +67,10 @@ const config = fs.existsSync(configFile) ? fs.readFileSync(configFile, 'utf8').s
 const setting = (key) => new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, 'm').exec(config)?.[1];
 const BASE_URL = (setting('server_url') || `http://${setting('bind') || '127.0.0.1:49374'}`).replace(/\/$/, '');
 export const MCP_URL = `${BASE_URL}/mcp`;
+// Como o install-hooks grava o endereço em cada hook. Hook com outra porta conta como não ligado.
+export const HOOKS_URL = `--server-url ${BASE_URL}`;
+// O JSON pode trazer a barra escapada ("http:\/\/"), como o hooks.json do Cursor no ai-memory 3.4.
+export const hooksAtUrl = (file) => fs.existsSync(file) && fs.readFileSync(file, 'utf8').replaceAll('\\/', '/').includes(HOOKS_URL);
 export const BIN = path.join(paths.install, 'ai-memory');
 // Arquivos de config que o ai-memory grava em cada agente com hooks: [MCP, hooks].
 export const AGENT_FILES = {
@@ -361,17 +366,76 @@ async function waitHealthy(seconds = 30) {
   return false;
 }
 
+// Com token (instalação nova do ai-memory 3.4+), o painel /web pede usuário e senha, e o init não cria
+// nenhum. Criamos o usuário (root) com o login do sistema e uma senha gerada, sem perguntar nada, e o
+// ./install.sh mostra os dois no fim. O add-human só dá senha temporária: trocamos pela final como o painel faz.
+export let webCredentials = null;
+async function webLogin({ dryRun }) {
+  if (!mcpToken()) return;
+  const list = run(BIN, ['user', 'list', '--json']);
+  let users = null;
+  try {
+    users = JSON.parse(list.stdout);
+  } catch {}
+  if (!Array.isArray(users)) return log.warn('não consegui listar os usuários do painel; veja "ai-memory user list"');
+  if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado (${users.map((u) => u.username).join(', ')})`);
+  const username = os.userInfo().username;
+  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${BASE_URL}/web`);
+  let temp;
+  try {
+    temp = JSON.parse(run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']).stdout).temporary_password;
+  } catch {}
+  if (!temp) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
+  const password = crypto.randomBytes(12).toString('base64url');
+  const error = await setWebPassword(username, temp, password);
+  webCredentials = { url: `${BASE_URL}/web`, reset: `${tilde(BIN)} user reset-password ${username}`, username, password: error ? temp : password, change: Boolean(error) };
+  if (error) log.warn(`não consegui gravar a senha final (${error}); o painel vai pedir uma senha nova no primeiro login`);
+  log.ok(`painel ${webCredentials.url}: usuário "${username}", senha ${webCredentials.password}`);
+}
+
+function postJson(url, body, headers = {}) {
+  return new Promise((resolve) => {
+    const data = JSON.stringify(body);
+    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers } }, (res) => {
+      let text = '';
+      res.on('data', (c) => (text += c));
+      res.on('end', () => resolve({ status: res.statusCode, cookies: res.headers['set-cookie'] || [], text }));
+    });
+    req.on('error', (e) => resolve({ status: 0, cookies: [], text: e.message }));
+    req.end(data);
+  });
+}
+
+// Entra com a senha temporária e troca pela final pelas mesmas rotas do painel. Devolve o erro ou ''.
+async function setWebPassword(username, temp, password) {
+  const login = await postJson(`${BASE_URL}/auth/login`, { username, password: temp });
+  if (login.status !== 200) return `login ${login.status}`;
+  const cookies = Object.fromEntries(login.cookies.map((c) => c.split(';')[0].split(/=(.*)/s).slice(0, 2)));
+  const change = await postJson(
+    `${BASE_URL}/auth/password`,
+    { current_password: temp, new_password: password, new_password_confirmation: password },
+    { Cookie: Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; '), 'X-CSRF-Token': decodeURIComponent(cookies.ai_memory_csrf || '') },
+  );
+  return change.status === 204 ? '' : `${change.status} ${change.text.slice(0, 200)}`;
+}
+
 // ---------- 4. agentes ----------
 
-// MCP registrado e algum hook chamando o ai-memory: o agente já está ligado.
+// MCP e hooks do ai-memory gravados com o endereço atual: o agente já está ligado. Com a porta
+// trocada no config.toml, o registro antigo não conta e o ./install.sh grava de novo.
 export function wired(agent, files) {
   const [mcpFile, hooksFile] = files;
-  const hooks = fs.existsSync(hooksFile) ? fs.readFileSync(hooksFile, 'utf8') : '';
-  const mcp =
-    agent === 'codex'
-      ? /^\[mcp_servers\.(ai-memory|"ai-memory")\]/m.test(fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8') : '')
-      : Boolean(readJSON(mcpFile, {}).mcpServers?.['ai-memory']);
-  return mcp && hooks.includes('ai-memory');
+  let mcp;
+  if (agent === 'codex') {
+    const lines = fs.existsSync(mcpFile) ? fs.readFileSync(mcpFile, 'utf8').split('\n') : [];
+    const { start, end } = codexAiMemoryTable(lines);
+    mcp = start >= 0 && lines.slice(start, end).join('\n').includes(MCP_URL);
+  } else {
+    // Pela URL ({ url }) ou, numa instalação com token, pela ponte stdio ({ command, args: [..., MCP_URL] }).
+    const entry = readJSON(mcpFile, {}).mcpServers?.['ai-memory'];
+    mcp = entry?.url === MCP_URL || Boolean(entry?.args?.includes(MCP_URL));
+  }
+  return mcp && hooksAtUrl(hooksFile);
 }
 
 // O Codex pede para revisar cada hook novo e guarda a aprovação (trusted_hash) no config.toml.
@@ -489,6 +553,28 @@ function unwireHooksFile(file, label, { dryRun = false } = {}) {
   log.ok(`${label}: hooks do ai-memory removidos`);
 }
 
+// O install-hooks regrava só os hooks que conhece. Hooks do ai-memory que versões antigas gravaram
+// (ex.: subagent-start/stop no hooks.json do Codex) ficavam no endereço anterior depois de trocar a porta.
+export function dropStaleHooks(file, { dryRun = false } = {}) {
+  if (dryRun || !fs.existsSync(file)) return;
+  const settings = readJSON(file, {});
+  const stale = (h) => {
+    const url = /--server-url\s+(\S+)/.exec(String(h.command || ''))?.[1];
+    return url && url.replace(/\/$/, '') !== BASE_URL;
+  };
+  let dropped = 0;
+  for (const [event, groups] of Object.entries(settings.hooks || {})) {
+    const kept = groups
+      .map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !(stale(h) && ++dropped)) }))
+      .filter((g) => g.hooks.length);
+    if (kept.length) settings.hooks[event] = kept;
+    else delete settings.hooks[event];
+  }
+  if (!dropped) return;
+  writeJSON(file, settings);
+  log.ok(`${tilde(file)}: ${dropped} hook(s) do ai-memory em outro endereço removido(s)`);
+}
+
 export const unwireOpenclaudeHooks = (opts) => unwireHooksFile(OPENCLAUDE_SETTINGS, 'openclaude', opts);
 
 // Desliga o ai-memory no Codex: MCP (pelo CLI dele) e hooks. A aprovação dos hooks fica no config.toml.
@@ -512,6 +598,7 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     for (const f of files[agent]) backupFile(f, { dryRun });
     ai(['install-mcp', '--client', client, '--apply']);
     ai(['install-hooks', '--agent', client, '--apply']);
+    dropStaleHooks(files[agent][1], { dryRun });
     if (agent === 'codex') bridgeCodex({ dryRun });
     if (agent === 'codex') log.info('Na primeira vez que abrir o Codex, ele pede para revisar os hooks: escolha "Trust all and continue".');
   }
@@ -521,10 +608,10 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     if (!profiles.length) log.warn('hermes não está no PATH; pulei');
     for (const h of profiles) {
       const entry = hermesMcpEntry(h);
-      if (entry?.command === BIN) log.ok(`${h.label}: ai-memory já registrado`);
+      if (entry?.command === BIN && entry.args?.join(' ') === BRIDGE_ARGS.join(' ')) log.ok(`${h.label}: ai-memory já registrado`);
       else if (
         dryRun ||
-        (await confirm(entry ? `${h.label}: trocar o registro do ai-memory pela ponte mcp-bridge?` : `${h.label}: registrar o MCP do ai-memory (hermes mcp add)?`))
+        (await confirm(entry ? `${h.label}: trocar o registro do ai-memory pela ponte mcp-bridge em ${MCP_URL}?` : `${h.label}: registrar o MCP do ai-memory (hermes mcp add)?`))
       ) {
         backupFile(run(h.bin, [...h.args, 'config', 'path']).stdout.trim(), { dryRun });
         if (entry) runWithAnswers(h.bin, [...h.args, 'mcp', 'remove', 'ai-memory'], 'y\n', { dryRun });
@@ -542,28 +629,31 @@ async function wireAgents(agents, { dryRun, binaryChanged }) {
     if (!oc) log.warn('openclaude não está no PATH; pulei');
     else {
       const got = run(oc, ['mcp', 'get', 'ai-memory']);
-      if (got.code === 0 && got.stdout.includes('mcp-bridge')) log.ok('openclaude: ai-memory já registrado');
+      if (got.code === 0 && got.stdout.includes('mcp-bridge') && got.stdout.includes(MCP_URL)) log.ok('openclaude: ai-memory já registrado');
       else if (
         dryRun ||
-        (await confirm(got.code === 0 ? 'openclaude: trocar o registro do ai-memory pela ponte mcp-bridge?' : 'openclaude: registrar o MCP do ai-memory no escopo de usuário?'))
+        (await confirm(got.code === 0 ? `openclaude: trocar o registro do ai-memory pela ponte mcp-bridge em ${MCP_URL}?` : 'openclaude: registrar o MCP do ai-memory no escopo de usuário?'))
       ) {
         backupFile(path.join(HOME, '.openclaude.json'), { dryRun });
         if (got.code === 0) runQuiet(oc, ['mcp', 'remove', '--scope', 'user', 'ai-memory'], { dryRun });
         runQuiet(oc, ['mcp', 'add', '--scope', 'user', 'ai-memory', '--', BIN, ...BRIDGE_ARGS], { dryRun });
       }
       // Os hooks do Claude Code, gravados com CLAUDE_CONFIG_DIR apontando para a pasta do OpenClaude.
-      if (!binaryChanged && hasText(OPENCLAUDE_SETTINGS, 'ai-memory')) log.ok('openclaude: hooks do ai-memory já ligados');
+      if (!binaryChanged && hooksAtUrl(OPENCLAUDE_SETTINGS)) log.ok('openclaude: hooks do ai-memory já ligados');
       else if (dryRun || (await confirm(`openclaude: gravar os hooks do ai-memory em ${tilde(OPENCLAUDE_SETTINGS)}?`))) {
         backupFile(OPENCLAUDE_SETTINGS, { dryRun });
         runQuiet(BIN, ['install-hooks', '--agent', 'claude-code', '--apply'], {
           dryRun,
           env: { CLAUDE_CONFIG_DIR: path.dirname(OPENCLAUDE_SETTINGS) },
         });
+        dropStaleHooks(OPENCLAUDE_SETTINGS, { dryRun });
       }
     }
   }
 
-  if (agents.includes('openclaw')) {
+  // A pasta ~/.openclaw basta para detectar o OpenClaw, mas o registro passa pelo CLI dele.
+  if (agents.includes('openclaw') && !which('openclaw')) log.warn('openclaw não está no PATH; pulei');
+  else if (agents.includes('openclaw')) {
     wireOpenclawMcp('ai-memory', { command: BIN, args: BRIDGE_ARGS }, { dryRun });
     if (!binaryChanged && openclawHooksWired())
       log.ok('openclaw: plugin de captura do ai-memory já instalado');
@@ -703,6 +793,7 @@ export async function setup({ dryRun = false, agents, llm, model, uninstall: off
     log.err(`${MCP_URL} não respondeu; veja ${MAC ? tilde(path.join(paths.logs, 'stderr.log')) : 'journalctl --user -u ai-memory'}`);
     return 1;
   }
+  await webLogin({ dryRun });
   await wireAgents(agents, { dryRun, binaryChanged });
   await isolateProjects({ dryRun });
 

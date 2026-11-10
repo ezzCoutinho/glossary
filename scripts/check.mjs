@@ -21,6 +21,7 @@ import {
   hermesAllowlist,
   hermesHooksWired,
   hermesMcpEntry,
+  hooksAtUrl,
   mcpStatus,
   mcpToken,
   wired,
@@ -128,6 +129,7 @@ export async function check({ agents } = {}) {
   else bad(`binário ${current || 'ausente'} em ${tilde(BIN)} (esperado ${version})`);
   const status = await mcpStatus();
   // Registro antigo pela URL: com token recebe 401; sem token ainda funciona, e o ./install.sh troca pela ponte.
+  const otherUrl = (label) => bad(`${label}: ai-memory registrado com outro endereço; o atual é ${MCP_URL} (rode ./install.sh)`);
   const viaUrl = (label) =>
     (mcpToken() ? bad : warn)(`${label}: MCP do ai-memory pela URL, sem a ponte mcp-bridge (${mcpToken() ? 'com token, recebe 401' : 'funciona sem token'}; rode ./install.sh)`);
   if (status === 405) ok(`servidor no ar (${MCP_URL})`);
@@ -139,19 +141,20 @@ export async function check({ agents } = {}) {
         warn('codex: tem a memória ligada, mas a instalação escolheu deixá-lo de fora');
       continue;
     }
-    if (!wired(agent, AGENT_FILES[agent])) bad(`${agent}: MCP ou hooks do ai-memory faltando`);
+    if (!wired(agent, AGENT_FILES[agent])) bad(`${agent}: MCP ou hooks do ai-memory faltando ou fora de ${MCP_URL} (rode ./install.sh)`);
     else if (agent === 'codex' && !codexBridged()) viaUrl('codex');
     else if (agent === 'codex' && !codexHooksTrusted()) warn('codex: MCP e hooks ligados; abra o Codex e escolha "Trust all and continue" nos hooks');
     else ok(`${agent}: MCP e hooks ligados`);
   }
   if (memoryAgents.includes('hermes')) {
     const profiles = hermesProfiles();
-    if (!profiles.length) bad('hermes: não está no PATH');
+    if (!profiles.length) warn('hermes: não está no PATH; a memória não foi ligada nele');
     for (const h of profiles) {
       const entry = hermesMcpEntry(h);
       const hooks = hermesHooksWired(h);
       if (!entry) bad(`${h.label}: MCP do ai-memory não registrado (rode ./install.sh)`);
       else if (entry.command !== BIN) viaUrl(h.label);
+      else if (entry.args?.join(' ') !== BRIDGE_ARGS.join(' ')) otherUrl(h.label);
       else if (entry.enabled === false) warn(`${h.label}: MCP do ai-memory registrado mas desligado (hermes ${h.args.join(' ')} mcp test ai-memory)`);
       else if (!hooks) warn(`${h.label}: MCP ligado, mas sem os hooks que gravam as sessões (rode ./install.sh)`);
       else if (!hasText(hermesAllowlist(h), 'ai-memory')) warn(`${h.label}: MCP e hooks ligados; abra o Hermes nesse perfil e aceite os hooks do ai-memory`);
@@ -163,9 +166,11 @@ export async function check({ agents } = {}) {
     const got = oc && run(oc, ['mcp', 'get', 'ai-memory']);
     const registered = got && got.code === 0;
     const hooks = hasText(OPENCLAUDE_SETTINGS, 'ai-memory');
+    const hooksHere = hooksAtUrl(OPENCLAUDE_SETTINGS);
     if (memoryAgents.includes('openclaude')) {
       if (!registered) bad('openclaude: MCP do ai-memory não registrado');
       else if (!got.stdout.includes('mcp-bridge')) viaUrl('openclaude');
+      else if (!got.stdout.includes(MCP_URL) || (hooks && !hooksHere)) otherUrl('openclaude');
       else if (!hooks) bad('openclaude: MCP ligado, mas sem os hooks que gravam as sessões (rode ./install.sh)');
       else ok('openclaude: MCP e hooks ligados');
     }
@@ -175,9 +180,11 @@ export async function check({ agents } = {}) {
   }
   if (memoryAgents.includes('openclaw')) {
     const entry = openclawConfig().mcp?.servers?.['ai-memory'];
-    if (!entry || entry.enabled === false) bad('openclaw: MCP do ai-memory ausente ou desligado (rode ./install.sh)');
+    if (!which('openclaw')) warn('openclaw: não está no PATH; a memória não foi ligada nele (instale o OpenClaw ou apague ~/.openclaw)');
+    else if (!entry || entry.enabled === false) bad('openclaw: MCP do ai-memory ausente ou desligado (rode ./install.sh)');
     else {
       if (entry.command === BIN && entry.args?.join(' ') === BRIDGE_ARGS.join(' ')) ok('openclaw: MCP do ai-memory registrado');
+      else if (entry.command === BIN && entry.args?.includes('mcp-bridge')) otherUrl('openclaw');
       else viaUrl('openclaw');
       if (openclawHooksWired()) ok('openclaw: plugin de captura das sessões instalado');
       else bad('openclaw: plugin de captura ausente, desligado ou sem acesso à conversa');
@@ -229,6 +236,7 @@ export async function check({ agents } = {}) {
 // true se o registro do Serena no agente está como o glossary grava; texto com o problema; null se não deu para conferir.
 function serenaRegistration(agent, h) {
   if (agent === 'openclaw') {
+    if (!which('openclaw')) return null;
     const entry = openclawConfig().mcp?.servers?.serena;
     return (entry?.enabled !== false && entry?.command && argsOk((entry.args || []).join(' '), agent)) || 'MCP do Serena ausente, desligado ou com outros argumentos';
   }
