@@ -369,18 +369,24 @@ async function waitHealthy(seconds = 30) {
 // Com token (instalação nova do ai-memory 3.4+), o painel /web pede usuário e senha, e o init não cria
 // nenhum. Criamos o usuário (root) com o login do sistema e uma senha gerada, sem perguntar nada, e o
 // ./install.sh mostra os dois no fim. O add-human só dá senha temporária: trocamos pela final como o painel faz.
-export let webCredentials = null;
+export let webPanel = null;
 async function webLogin({ dryRun }) {
-  if (!mcpToken()) return;
+  const url = `${BASE_URL}/web`;
+  if (!mcpToken()) return (webPanel = { url, open: true });
   const list = run(BIN, ['user', 'list', '--json']);
   let users = null;
   try {
     users = JSON.parse(list.stdout);
   } catch {}
   if (!Array.isArray(users)) return log.warn('não consegui listar os usuários do painel; veja "ai-memory user list"');
-  if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado (${users.map((u) => u.username).join(', ')})`);
+  const reset = (u) => `${tilde(BIN)} user reset-password ${u}`;
+  if (users.length) {
+    const username = users[0].username;
+    webPanel = { url, username, reset: reset(username) };
+    return log.ok(`painel ${url}: login já criado (${users.map((u) => u.username).join(', ')})`);
+  }
   const username = os.userInfo().username;
-  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${BASE_URL}/web`);
+  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${url}`);
   let temp;
   try {
     temp = JSON.parse(run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']).stdout).temporary_password;
@@ -388,9 +394,9 @@ async function webLogin({ dryRun }) {
   if (!temp) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
   const password = crypto.randomBytes(12).toString('base64url');
   const error = await setWebPassword(username, temp, password);
-  webCredentials = { url: `${BASE_URL}/web`, reset: `${tilde(BIN)} user reset-password ${username}`, username, password: error ? temp : password, change: Boolean(error) };
+  webPanel = { url, username, password: error ? temp : password, change: Boolean(error), reset: reset(username) };
   if (error) log.warn(`não consegui gravar a senha final (${error}); o painel vai pedir uma senha nova no primeiro login`);
-  log.ok(`painel ${webCredentials.url}: usuário "${username}", senha ${webCredentials.password}`);
+  log.ok(`painel ${url}: usuário "${username}", senha ${webPanel.password}`);
 }
 
 function postJson(url, body, headers = {}) {
