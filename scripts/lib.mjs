@@ -450,6 +450,7 @@ let assumeYes = false;
 export function setAssumeYes(v) {
   assumeYes = Boolean(v);
 }
+export const assumingYes = () => assumeYes;
 
 export async function ask(question, fallback = '') {
   if (!process.stdin.isTTY) return fallback;

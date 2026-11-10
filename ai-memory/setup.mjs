@@ -7,6 +7,7 @@
 //
 // Os dados ficam em ~/Library/Application Support/ai-memory (macOS) ou ~/.local/share/ai-memory
 // (Linux) e nunca entram em repositório. Backup: ai-memory backup --to <arquivo>.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -18,6 +19,7 @@ import {
   REPO,
   ask,
   askSecret,
+  assumingYes,
   backupFile,
   checkHermes,
   confirm,
@@ -366,8 +368,9 @@ async function waitHealthy(seconds = 30) {
 }
 
 // Com token (instalação nova do ai-memory 3.4+), o painel /web pede usuário e senha, e o init não cria
-// nenhum. Criamos um usuário root com o nome do login e mostramos a senha temporária uma vez.
-function webLogin({ dryRun }) {
+// nenhum. Criamos o usuário (root) já com a senha escolhida; com --yes ou sem terminal, geramos uma e
+// mostramos. O add-human só dá senha temporária, então trocamos pela final como o próprio painel faz.
+async function webLogin({ dryRun }) {
   if (!mcpToken()) return;
   const list = run(BIN, ['user', 'list', '--json']);
   let users = null;
@@ -375,17 +378,56 @@ function webLogin({ dryRun }) {
     users = JSON.parse(list.stdout);
   } catch {}
   if (!Array.isArray(users)) return log.warn('não consegui listar os usuários do painel; veja "ai-memory user list"');
-  if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado`);
-  const username = os.userInfo().username;
-  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${BASE_URL}/web`);
-  const out = run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']);
-  let password;
+  if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado (${users.map((u) => u.username).join(', ')})`);
+  if (dryRun) return log.dry(`pediria usuário e senha e criaria o login do painel ${BASE_URL}/web`);
+  const interactive = process.stdin.isTTY && !assumingYes();
+  const username = interactive ? await ask(`Usuário do painel da memória [${os.userInfo().username}]:`, os.userInfo().username) : os.userInfo().username;
+  let password = '';
+  while (interactive && !password) {
+    const first = await askSecret('Senha do painel (não aparece na tela; vazio = gerar uma):');
+    if (!first) break;
+    if (first === (await askSecret('Repita a senha:'))) password = first;
+    else log.warn('as senhas não conferem; tente de novo');
+  }
+  const generated = !password;
+  if (generated) password = crypto.randomBytes(12).toString('base64url');
+  let temp;
   try {
-    password = JSON.parse(out.stdout).temporary_password;
+    temp = JSON.parse(run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']).stdout).temporary_password;
   } catch {}
-  if (!password) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
-  log.ok(`painel ${BASE_URL}/web: usuário "${username}", senha temporária ${password}`);
-  log.info('Guarde a senha: ela aparece só agora, e o painel pede uma nova no primeiro login.');
+  if (!temp) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
+  const error = await setWebPassword(username, temp, password);
+  if (error) {
+    log.warn(`login "${username}" criado, mas a senha escolhida não foi aceita (${error}); entre com a senha temporária ${temp} e troque no painel`);
+    return;
+  }
+  log.ok(`painel ${BASE_URL}/web: usuário "${username}"${generated ? `, senha ${password} (guarde; esqueceu: ${tilde(BIN)} user reset-password ${username})` : ' com a senha que você escolheu'}`);
+}
+
+function postJson(url, body, headers = {}) {
+  return new Promise((resolve) => {
+    const data = JSON.stringify(body);
+    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers } }, (res) => {
+      let text = '';
+      res.on('data', (c) => (text += c));
+      res.on('end', () => resolve({ status: res.statusCode, cookies: res.headers['set-cookie'] || [], text }));
+    });
+    req.on('error', (e) => resolve({ status: 0, cookies: [], text: e.message }));
+    req.end(data);
+  });
+}
+
+// Entra com a senha temporária e troca pela final pelas mesmas rotas do painel. Devolve o erro ou ''.
+async function setWebPassword(username, temp, password) {
+  const login = await postJson(`${BASE_URL}/auth/login`, { username, password: temp });
+  if (login.status !== 200) return `login ${login.status}`;
+  const cookies = Object.fromEntries(login.cookies.map((c) => c.split(';')[0].split(/=(.*)/s).slice(0, 2)));
+  const change = await postJson(
+    `${BASE_URL}/auth/password`,
+    { current_password: temp, new_password: password, new_password_confirmation: password },
+    { Cookie: Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; '), 'X-CSRF-Token': decodeURIComponent(cookies.ai_memory_csrf || '') },
+  );
+  return change.status === 204 ? '' : `${change.status} ${change.text.slice(0, 200)}`;
 }
 
 // ---------- 4. agentes ----------
@@ -762,7 +804,7 @@ export async function setup({ dryRun = false, agents, llm, model, uninstall: off
     log.err(`${MCP_URL} não respondeu; veja ${MAC ? tilde(path.join(paths.logs, 'stderr.log')) : 'journalctl --user -u ai-memory'}`);
     return 1;
   }
-  webLogin({ dryRun });
+  await webLogin({ dryRun });
   await wireAgents(agents, { dryRun, binaryChanged });
   await isolateProjects({ dryRun });
 

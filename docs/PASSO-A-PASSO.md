@@ -55,7 +55,7 @@ O instalador também cria o **`glossary-internal`** ao lado do glossary (ex.: `~
 | Atualizar skills e ferramentas | `git pull && ./install.sh --yes` |
 | Adicionar um projeto da empresa | `./install.sh` e informe a pasta nova |
 | Levar as skills privadas e a config para outro computador | `./install.sh --export` (veja abaixo) |
-| Ver o que a memória guardou | abra http://127.0.0.1:49374/web (entre com o usuário e a senha que o `./install.sh` mostrou; esqueceu: `~/Applications/ai-memory/ai-memory user reset-password $USER`) |
+| Ver o que a memória guardou | abra http://127.0.0.1:49374/web (entre com o usuário e a senha definidos no `./install.sh`; esqueceu: `~/Applications/ai-memory/ai-memory user reset-password $USER`) |
 | Levar de novo para a memória o que os agentes guardaram | `node ai-memory/history.mjs` (mostra) e `--apply` (importa) |
 
 O histórico que entra é o do Claude Code (terminal e VS Code), com as memórias que ele guarda por projeto, e o do Codex. O histórico de chat do Cursor, do Hermes e do OpenClaude não é importado; as conversas novas deles entram normalmente.
