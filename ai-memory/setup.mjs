@@ -19,7 +19,6 @@ import {
   REPO,
   ask,
   askSecret,
-  assumingYes,
   backupFile,
   checkHermes,
   confirm,
@@ -368,8 +367,9 @@ async function waitHealthy(seconds = 30) {
 }
 
 // Com token (instalação nova do ai-memory 3.4+), o painel /web pede usuário e senha, e o init não cria
-// nenhum. Criamos o usuário (root) já com a senha escolhida; com --yes ou sem terminal, geramos uma e
-// mostramos. O add-human só dá senha temporária, então trocamos pela final como o próprio painel faz.
+// nenhum. Criamos o usuário (root) com o login do sistema e uma senha gerada, sem perguntar nada, e o
+// ./install.sh mostra os dois no fim. O add-human só dá senha temporária: trocamos pela final como o painel faz.
+export let webCredentials = null;
 async function webLogin({ dryRun }) {
   if (!mcpToken()) return;
   const list = run(BIN, ['user', 'list', '--json']);
@@ -379,29 +379,18 @@ async function webLogin({ dryRun }) {
   } catch {}
   if (!Array.isArray(users)) return log.warn('não consegui listar os usuários do painel; veja "ai-memory user list"');
   if (users.length) return log.ok(`painel ${BASE_URL}/web: login já criado (${users.map((u) => u.username).join(', ')})`);
-  if (dryRun) return log.dry(`pediria usuário e senha e criaria o login do painel ${BASE_URL}/web`);
-  const interactive = process.stdin.isTTY && !assumingYes();
-  const username = interactive ? await ask(`Usuário do painel da memória [${os.userInfo().username}]:`, os.userInfo().username) : os.userInfo().username;
-  let password = '';
-  while (interactive && !password) {
-    const first = await askSecret('Senha do painel (não aparece na tela; vazio = gerar uma):');
-    if (!first) break;
-    if (first === (await askSecret('Repita a senha:'))) password = first;
-    else log.warn('as senhas não conferem; tente de novo');
-  }
-  const generated = !password;
-  if (generated) password = crypto.randomBytes(12).toString('base64url');
+  const username = os.userInfo().username;
+  if (dryRun) return log.dry(`criaria o login "${username}" do painel ${BASE_URL}/web`);
   let temp;
   try {
     temp = JSON.parse(run(BIN, ['user', 'add-human', '--username', username, '--role', 'root', '--json']).stdout).temporary_password;
   } catch {}
   if (!temp) return log.warn(`não consegui criar o login do painel; rode ${tilde(BIN)} user add-human --username ${username} --role root`);
+  const password = crypto.randomBytes(12).toString('base64url');
   const error = await setWebPassword(username, temp, password);
-  if (error) {
-    log.warn(`login "${username}" criado, mas a senha escolhida não foi aceita (${error}); entre com a senha temporária ${temp} e troque no painel`);
-    return;
-  }
-  log.ok(`painel ${BASE_URL}/web: usuário "${username}"${generated ? `, senha ${password} (guarde; esqueceu: ${tilde(BIN)} user reset-password ${username})` : ' com a senha que você escolheu'}`);
+  webCredentials = { url: `${BASE_URL}/web`, reset: `${tilde(BIN)} user reset-password ${username}`, username, password: error ? temp : password, change: Boolean(error) };
+  if (error) log.warn(`não consegui gravar a senha final (${error}); o painel vai pedir uma senha nova no primeiro login`);
+  log.ok(`painel ${webCredentials.url}: usuário "${username}", senha ${webCredentials.password}`);
 }
 
 function postJson(url, body, headers = {}) {
